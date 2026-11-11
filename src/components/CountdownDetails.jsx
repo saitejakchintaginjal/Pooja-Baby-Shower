@@ -41,10 +41,16 @@ export default function CountdownDetails() {
   const time = d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true })
 
   return (
-    <section id="details" data-section className="snap-section bg-sandal">
+    <section
+      id="details"
+      data-section
+      // cream tint behind the text at the top that fades away toward the bottom, so the video shows clearly there
+      className="snap-section bg-[linear-gradient(to_bottom,rgba(246,233,198,.86)_0%,rgba(246,233,198,.74)_52%,rgba(246,233,198,.2)_82%,rgba(246,233,198,0)_100%)]"
+    >
       {/* celebration: confetti keeps falling (and doubles up once the big day arrives) */}
       <Confetti count={t.done ? 60 : 28} />
-      <Frame className="flex flex-col items-center justify-center text-center">
+      {/* content sits at the top on portrait screens, leaving the lower part of the screen to the video */}
+      <Frame className="flex flex-col items-center justify-start text-center landscape:justify-center">
         <Reveal className="w-full max-w-3xl">
           <h2 className="font-display text-[clamp(1.35rem,min(6.4vw,4.2svh),2.4rem)] leading-tight text-indigo">
             {t.done ? 'The celebration is here!' : 'Counting down to the celebration'}{' '}

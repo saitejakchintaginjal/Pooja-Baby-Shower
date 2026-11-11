@@ -47,7 +47,8 @@ export default function Intro3D({ onOpen, onDone }) {
     if (fallback) return
     let dead = false
     let dispose = () => {}
-    import('../intro3d/scene')
+    // the South Indian temple entrance is the default; add ?doors to the address to see the earlier pastel doors
+    ;(new URLSearchParams(window.location.search).has('doors') ? import('../intro3d/scene-doors') : import('../intro3d/scene'))
       .then(({ createDoorScene }) => {
         if (dead) return
         try {
@@ -97,17 +98,19 @@ export default function Intro3D({ onOpen, onDone }) {
       className={`fixed inset-0 z-[70] overflow-hidden bg-[#f7e6f3] outline-none transition-opacity duration-[900ms] ${fade ? 'pointer-events-none opacity-0' : 'opacity-100'} ${tapped ? '' : 'cursor-pointer'}`}
     >
       <div ref={mount} className="absolute inset-0" />
-      {/* soft cream fades behind the text so it stays readable over the bright wall and floor */}
-      <div aria-hidden="true" className={`pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,246,236,.6),transparent_10%,transparent_66%,rgba(255,244,234,.82))] transition-opacity duration-700 ${tapped ? 'opacity-0' : 'opacity-100'}`} />
+      {/* dark fades behind the text (top for the names, bottom for the tap prompt) so it reads over the bright wall and floor */}
+      <div aria-hidden="true" className={`pointer-events-none absolute inset-0 bg-[linear-gradient(to_bottom,rgba(22,7,12,.82)_0%,rgba(22,7,12,.55)_14%,transparent_27%,transparent_80%,rgba(22,7,12,.8)_100%)] transition-opacity duration-700 ${tapped ? 'opacity-0' : 'opacity-100'}`} />
 
-      <div className={`pointer-events-none absolute inset-x-0 top-[4.5svh] px-6 text-center transition-opacity duration-700 ${tapped ? 'opacity-0' : 'opacity-100'}`}>
-        <p className="font-serif text-[clamp(.75rem,2.4svh,1.1rem)] font-semibold uppercase tracking-[0.3em] text-indigo [text-shadow:0_1px_8px_rgba(255,255,255,.95)]">|| Jai Shri Krishna ||</p>
+      {/* top: blessing, then the names and the invitation line */}
+      <div className={`pointer-events-none absolute inset-x-0 top-[3.5svh] px-6 text-center transition-opacity duration-700 ${tapped ? 'opacity-0' : 'opacity-100'}`}>
+        <p className="font-serif text-[clamp(.75rem,2.2svh,1.05rem)] uppercase tracking-[0.3em] text-gold-light [text-shadow:0_2px_10px_rgba(0,0,0,.9)]">|| Jai Shri Krishna ||</p>
+        <p className="gold-text mt-[0.8svh] font-display text-[clamp(1.6rem,min(8vw,5svh),2.8rem)] font-bold leading-tight [filter:drop-shadow(0_2px_10px_rgba(0,0,0,.85))]">{event.parents}</p>
+        <p className="font-serif text-[clamp(.95rem,min(4.4vw,2.8svh),1.35rem)] italic text-sandal [text-shadow:0_2px_10px_rgba(0,0,0,.9)]">invite you to the {event.title}</p>
       </div>
 
+      {/* bottom: the tap prompt stays where thumbs expect it */}
       <div className={`pointer-events-none absolute inset-x-0 bottom-[4svh] px-6 text-center transition-opacity duration-700 ${tapped ? 'opacity-0' : 'opacity-100'}`}>
-        <p className="font-display text-[clamp(1.6rem,min(8vw,5svh),2.8rem)] font-bold leading-tight text-[#c2185b] [text-shadow:0_1px_10px_rgba(255,255,255,.95)]">{event.parents}</p>
-        <p className="font-serif text-[clamp(.95rem,min(4.4vw,2.8svh),1.35rem)] italic text-indigo [text-shadow:0_1px_8px_rgba(255,255,255,.95)]">invite you to the {event.title}</p>
-        <p className="mt-[1.4svh] inline-block animate-pulse rounded-full border border-gold bg-white/75 px-5 py-[1svh] text-[clamp(.6rem,1.8svh,.8rem)] font-semibold uppercase tracking-[0.3em] text-indigo shadow backdrop-blur">
+        <p className="inline-block animate-pulse rounded-full border border-gold bg-black/45 px-5 py-[1svh] text-[clamp(.6rem,1.8svh,.8rem)] font-semibold uppercase tracking-[0.3em] text-gold-light shadow backdrop-blur">
           Tap anywhere to open
         </p>
       </div>

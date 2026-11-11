@@ -49,7 +49,7 @@ export default function Vote() {
   const chosen = options.find((o) => o.id === pick)
 
   return (
-    <section data-section className="snap-section">
+    <section data-section className="snap-section bg-cream/60">
       <Frame className="flex flex-col items-center justify-center text-center">
       <Reveal>
         <p className="text-[clamp(.65rem,1.9svh,.8rem)] uppercase tracking-[0.3em] text-peacock">Place your guess</p>

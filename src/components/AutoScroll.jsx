@@ -1,22 +1,17 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 
-// Auto-scrolls from section to section: waits 3s on the first page, then glides down,
-// pausing 2s on each section. Any tap / click / scroll / key press pauses it, and it
-// carries on 2s after the visitor's last interaction. The small button turns it off for good.
-const FIRST_DELAY = 3000 // wait on the first page
-const DWELL = 2000 // pause on every other section
-const RESUME_AFTER = 2000 // wait after a tap / scroll before auto-scroll carries on
-const GLIDE_MS = 2200 // one slow, gentle glide from section to section
+// Auto-scrolls from section to section. It waits WAIT_MS on every screen (the first page included),
+// then glides to the next. Any tap / click / scroll / key press stops it straight away, and it
+// starts again WAIT_MS after the visitor's last interaction. There is no on/off button.
+const WAIT_MS = 3000
+const GLIDE_MS = 4500 // one slow, gentle glide from section to section
 
 // sine ease-in-out: starts and stops softly, with no sudden acceleration
 const ease = (t) => 0.5 - Math.cos(Math.PI * t) / 2
 
 export default function AutoScroll() {
-  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  const [on, setOn] = useState(!reduce)
-
   useEffect(() => {
-    if (!on) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return // no automatic motion for these visitors
     const root = document.documentElement
     let timer = 0
     let idle = 0
@@ -43,6 +38,11 @@ export default function AutoScroll() {
     }
 
     const step = () => {
+      // a photo is open full screen: stay put and check again shortly
+      if (root.hasAttribute('data-lightbox')) {
+        timer = setTimeout(step, 500)
+        return
+      }
       const list = sections()
       const i = current()
       if (i >= list.length - 1) return // reached the last section
@@ -58,13 +58,13 @@ export default function AutoScroll() {
           raf = requestAnimationFrame(frame)
         } else {
           release()
-          timer = setTimeout(step, DWELL)
+          timer = setTimeout(step, WAIT_MS)
         }
       }
       raf = requestAnimationFrame(frame)
     }
 
-    // any interaction: stop right now, then carry on RESUME_AFTER ms after the last one
+    // any interaction: stop right now, then carry on WAIT_MS after the last one
     const pause = () => {
       clearTimeout(timer)
       clearTimeout(idle)
@@ -72,27 +72,25 @@ export default function AutoScroll() {
     }
     const resumeLater = () => {
       clearTimeout(idle)
-      idle = setTimeout(step, RESUME_AFTER)
+      idle = setTimeout(step, WAIT_MS)
     }
-    const ignore = (e) => e.target instanceof Element && e.target.closest('[data-autoscroll-toggle]')
 
     const onDown = (e) => {
-      if (ignore(e) || (e.type === 'pointerdown' && e.pointerType === 'touch')) return // touch is handled by touchstart
+      if (e.type === 'pointerdown' && e.pointerType === 'touch') return // touch is handled by touchstart
       holding = true
       pause()
     }
     const onUp = (e) => {
-      if (ignore(e) || (e.type === 'pointerup' && e.pointerType === 'touch')) return
+      if (e.type === 'pointerup' && e.pointerType === 'touch') return
       holding = false
       resumeLater()
     }
-    const onWheelKey = (e) => {
-      if (ignore(e)) return
+    const onWheelKey = () => {
       pause()
       if (!holding) resumeLater()
     }
 
-    timer = setTimeout(step, FIRST_DELAY)
+    timer = setTimeout(step, WAIT_MS)
     const opts = { passive: true }
     window.addEventListener('pointerdown', onDown, opts)
     window.addEventListener('touchstart', onDown, opts)
@@ -113,18 +111,7 @@ export default function AutoScroll() {
       window.removeEventListener('wheel', onWheelKey)
       window.removeEventListener('keydown', onWheelKey)
     }
-  }, [on])
+  }, [])
 
-  return (
-    <button
-      type="button"
-      data-autoscroll-toggle
-      onClick={() => setOn((v) => !v)}
-      aria-pressed={on}
-      aria-label={on ? 'Pause auto-scroll' : 'Start auto-scroll'}
-      className="fixed bottom-4 right-14 z-50 flex h-9 w-9 items-center justify-center rounded-full border border-gold/50 bg-indigo-dark/70 text-sm text-gold-light opacity-70 transition hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold-light"
-    >
-      <span aria-hidden="true">{on ? '⏸' : '▶'}</span>
-    </button>
-  )
+  return null
 }

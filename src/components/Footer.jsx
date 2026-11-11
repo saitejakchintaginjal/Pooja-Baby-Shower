@@ -61,7 +61,7 @@ export default function Footer() {
   return (
     <footer
       data-section
-      className="snap-section bg-[radial-gradient(ellipse_at_50%_42%,#22388f_0%,#101c55_48%,#070d2e_100%)] text-cream"
+      className="snap-section bg-[radial-gradient(ellipse_at_50%_42%,rgba(34,56,143,.82)_0%,rgba(16,28,85,.88)_48%,rgba(7,13,46,.92)_100%)] text-cream"
     >
       {/* spinning mandala behind everything */}
       <div className="pointer-events-none absolute left-1/2 top-1/2 w-[min(112vw,112svh)] -translate-x-1/2 -translate-y-1/2 opacity-30" aria-hidden="true">

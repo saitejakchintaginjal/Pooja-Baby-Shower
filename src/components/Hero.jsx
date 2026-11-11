@@ -14,18 +14,8 @@ const stars = Array.from({ length: 22 }, (_, i) => ({
 // small phones, tall phones, tablets, short landscape phones and desktops.
 export default function Hero() {
   return (
-    <header data-section className="snap-section bg-indigo-dark text-cream">
-      {/* looping background video (skipped for reduced-motion users) */}
-      <video
-        className="pointer-events-none absolute inset-0 h-full w-full object-cover motion-reduce:hidden md:object-[50%_90%]"
-        src="/hero-bg.mp4"
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="metadata"
-        aria-hidden="true"
-      />
+    <header data-section className="snap-section text-cream">
+      {/* (the looping video now lives in <Backdrop />, fixed behind every screen) */}
       {/* Overlay: deep Krishna-blue behind the photo + text at the top, fading away toward the bottom
           so the video's flowers and characters play clearly there */}
       <div
@@ -41,8 +31,8 @@ export default function Hero() {
       <div className="pointer-events-none absolute inset-2 rounded-[1.5rem] border border-gold/50 sm:inset-5 sm:rounded-[2rem]" aria-hidden="true" />
 
       {/* corner peacock feathers (only where there is room) */}
-      <Feather className="floaty pointer-events-none absolute -left-4 top-10 hidden h-[34svh] w-auto rotate-[25deg] opacity-80 md:block" />
-      <Feather className="floaty pointer-events-none absolute -right-4 bottom-10 hidden h-[34svh] w-auto -rotate-[155deg] opacity-80 md:block" style={{ animationDelay: '1.5s' }} />
+      <Feather className="floaty pointer-events-none absolute left-2 top-12 hidden h-[34svh] w-auto rotate-[25deg] opacity-80 md:block" />
+      <Feather className="floaty pointer-events-none absolute right-2 bottom-12 hidden h-[34svh] w-auto -rotate-[155deg] opacity-80 md:block" style={{ animationDelay: '1.5s' }} />
 
       <div className="relative mx-auto flex h-full max-w-5xl flex-col items-center justify-start gap-[2.2svh] px-5 pb-[3svh] pt-[5svh] text-center landscape:flex-row landscape:justify-center landscape:gap-[5vw] landscape:pb-[22svh] landscape:pt-[3svh] landscape:text-left lg:flex-row lg:justify-center lg:gap-16 lg:pb-[26svh] lg:text-left">
         {/* Smaller arch-shaped (temple-niche) frame, faded at the bottom into the background */}

@@ -9,6 +9,7 @@ import Footer from './components/Footer'
 import Petals from './components/Petals'
 import Music from './components/Music'
 import AutoScroll from './components/AutoScroll'
+import Backdrop from './components/Backdrop'
 
 export default function App() {
   // opened: tapped, site mounts (so its entrance animations play as the doors open)
@@ -21,6 +22,7 @@ export default function App() {
       {!introDone && <Intro onOpen={() => setOpened(true)} onDone={() => setIntroDone(true)} />}
       <Music />
       {introDone && <AutoScroll />}
+      {opened && <Backdrop />}
       {opened && (
         <main>
           <Petals />

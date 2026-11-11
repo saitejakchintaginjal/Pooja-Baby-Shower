@@ -4,7 +4,7 @@ import Frame from './Frame'
 
 export default function Ceremony() {
   return (
-    <section data-section className="snap-section">
+    <section data-section className="snap-section bg-cream/60">
       <Frame>
       <div className="mx-auto flex h-full max-w-4xl flex-col items-center justify-center gap-[3svh] text-center landscape:flex-row landscape:gap-10 landscape:text-left md:flex-row md:gap-12 md:text-left">
         <Reveal className="shrink-0">
@@ -23,7 +23,7 @@ export default function Ceremony() {
           <p className="text-[clamp(.65rem,1.9svh,.8rem)] uppercase tracking-[0.3em] text-peacock">The Ceremony</p>
           <h2 className="mt-[1svh] font-display text-[clamp(1.5rem,min(7vw,4.6svh),2.6rem)] leading-tight text-indigo">Blessings, songs and sweets</h2>
           <p className="mt-[1.6svh] font-serif text-[clamp(1rem,min(4.4vw,2.8svh),1.3rem)] leading-snug text-indigo-dark/80">
-            Seemantham is a day to shower the mother-to-be with blessings, flowers, bangles and love from
+            Sreemantham is a day to shower the mother-to-be with blessings, flowers, bangles and love from
             family and friends — and to welcome the little one in the most auspicious way.
           </p>
         </Reveal>

@@ -1,29 +1,32 @@
-// 3D "baby shower" entrance, rendered with three.js. Everything is procedural (no model or
-// texture files). Realism comes from: bevelled geometry that catches light, physically based
-// materials, soft shadows, a glossy tile floor, multisampled anti-aliasing, vignette + film grain, architectural detail (pilasters, cornice, steps, mouldings, hinges)
-// and balloons tied to gift boxes.
+// South Indian "Sreemantham" entrance, rendered with three.js (everything procedural, no model files):
+//  - a carved teak (Chettinad-style) doorway with lathe-turned pillars, brass caps and bells
+//  - a kavi (red & white striped) temple wall
+//  - a curtain of jasmine + marigold strands that parts when you tap
+//  - a toran of real ruffled marigold flowers and mango leaves; marigold garlands on the pillars
+//  - magenta silk drapes with gold zari borders, brass kuthuvilakku lamps, clay diyas with lit flames
+//  - kalasams with coconuts, plantain trees, a kolam, hanging valaikappu bangles
+//  - behind the curtain: the illustrated thottil (baby in a silk cloth cradle), softly lit in golden light
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js'
 
-let seed = 11
+let seed = 5
 const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647
 const clamp01 = (v) => Math.min(1, Math.max(0, v))
 const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
 const lerp = (a, b, t) => a + (b - a) * t
 
-const DW = 2.05 // width of one door leaf
-const DH = 6.2 // door height
-const DT = 0.2 // door thickness
-const FLOOR_Y = -DH / 2
-const PASTEL = [0xff8fb8, 0x7cc4f5, 0xffe27a, 0x8ee3c4, 0xc9a7ff]
-
-// bevelled box: the rounded edge catches highlights, which is a big part of looking "real"
+const FLOOR_Y = -3.2
+const OPEN_W = 4.4 // doorway width
+const PILLAR_TOP = 3.75
+const BEAM_Y = PILLAR_TOP + 0.3
 const rgeo = (w, h, d, r = 0.03) => new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001))
+const lathe = (pts, seg = 36) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg)
 
 function canvas(w, h) {
   const c = document.createElement('canvas')
@@ -32,239 +35,260 @@ function canvas(w, h) {
   return [c, c.getContext('2d')]
 }
 
-function flower(g, x, y, r, petal, center, n = 6) {
-  g.fillStyle = petal
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2
+// dark teak with grain (vertical streaks, wavy lines)
+function teakCanvas() {
+  const [c, g] = canvas(256, 512)
+  const base = g.createLinearGradient(0, 0, 256, 0)
+  base.addColorStop(0, '#4a230e')
+  base.addColorStop(0.5, '#6e3a18')
+  base.addColorStop(1, '#431e0a')
+  g.fillStyle = base
+  g.fillRect(0, 0, 256, 512)
+  for (let i = 0; i < 700; i++) {
+    const a = 0.05 + rnd() * 0.22
+    g.fillStyle = rnd() < 0.55 ? `rgba(22,9,2,${a})` : `rgba(200,140,80,${a * 0.5})`
+    g.fillRect(rnd() * 256, 0, 0.5 + rnd() * 2.2, 512)
+  }
+  g.lineWidth = 1.1
+  for (let i = 0; i < 30; i++) {
+    g.strokeStyle = `rgba(20,8,2,${0.18 + rnd() * 0.2})`
     g.beginPath()
-    g.arc(x + Math.cos(a) * r * 0.62, y + Math.sin(a) * r * 0.62, r * 0.5, 0, Math.PI * 2)
-    g.fill()
+    const x0 = rnd() * 256, amp = 2 + rnd() * 8, f = 0.008 + rnd() * 0.01
+    for (let y = 0; y <= 512; y += 14) { const x = x0 + Math.sin(y * f + i) * amp; y === 0 ? g.moveTo(x, y) : g.lineTo(x, y) }
+    g.stroke()
   }
-  g.fillStyle = center
-  g.beginPath()
-  g.arc(x, y, r * 0.38, 0, Math.PI * 2)
-  g.fill()
-}
-
-// Painted plaster wall with a stencilled flower pattern + mottled paint
-function wallCanvases() {
-  const [c, g] = canvas(512, 512)
-  const bg = g.createLinearGradient(0, 0, 0, 512)
-  bg.addColorStop(0, '#f6dcb6')
-  bg.addColorStop(1, '#f1c9b4')
-  g.fillStyle = bg
-  g.fillRect(0, 0, 512, 512)
-  for (let i = 0; i < 90; i++) {
-    const x = rnd() * 512, y = rnd() * 512, r = 30 + rnd() * 90
-    const m = g.createRadialGradient(x, y, 0, x, y, r)
-    const light = rnd() < 0.5
-    m.addColorStop(0, light ? 'rgba(255,255,255,.08)' : 'rgba(120,70,40,.07)')
-    m.addColorStop(1, 'rgba(0,0,0,0)')
-    g.fillStyle = m
-    g.fillRect(x - r, y - r, r * 2, r * 2)
-  }
-  const cols = [['#f5859f', '#ffe27a'], ['#6fb4e6', '#fff'], ['#f7c948', '#f5859f'], ['#7fd1ae', '#fff'], ['#b898ee', '#ffe27a']]
-  for (let gy = 0; gy < 4; gy++) {
-    for (let gx = 0; gx < 4; gx++) {
-      const x = 64 + gx * 128 + (gy % 2) * 40 - 20
-      const y = 64 + gy * 128
-      const [p, ctr] = cols[(gx + gy * 2) % cols.length]
-      g.fillStyle = '#5fb985'
-      for (const a of [-0.9, 0.9, 2.4, -2.4]) {
-        g.save(); g.translate(x, y); g.rotate(a); g.beginPath(); g.ellipse(34, 0, 20, 8, 0, 0, Math.PI * 2); g.fill(); g.restore()
-      }
-      flower(g, x, y, 24, p, ctr)
-    }
-  }
-  const [b, k] = canvas(256, 256)
-  k.fillStyle = '#808080'
-  k.fillRect(0, 0, 256, 256)
-  for (let i = 0; i < 9000; i++) { k.fillStyle = `rgba(${rnd() < 0.5 ? '255,255,255' : '0,0,0'},${rnd() * 0.13})`; k.fillRect(rnd() * 256, rnd() * 256, 1 + rnd() * 2, 1 + rnd() * 2) }
-  return { color: c, bump: b }
-}
-
-// Polished cream & peach tiles with dark grout and subtle veining
-function floorCanvas() {
-  const [c, g] = canvas(512, 512)
-  for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) {
-    const gr = g.createLinearGradient(x * 128, y * 128, x * 128 + 128, y * 128 + 128)
-    const a = (x + y) % 2
-    gr.addColorStop(0, a ? '#f9d9c5' : '#fff3df')
-    gr.addColorStop(1, a ? '#f3cbb4' : '#f6e4c9')
-    g.fillStyle = gr
-    g.fillRect(x * 128, y * 128, 128, 128)
-    g.strokeStyle = 'rgba(150,100,70,.16)'
-    g.lineWidth = 1.2
-    for (let v = 0; v < 3; v++) {
-      g.beginPath()
-      g.moveTo(x * 128 + rnd() * 128, y * 128)
-      g.bezierCurveTo(x * 128 + rnd() * 128, y * 128 + 40, x * 128 + rnd() * 128, y * 128 + 90, x * 128 + rnd() * 128, y * 128 + 128)
-      g.stroke()
-    }
-  }
-  g.strokeStyle = 'rgba(95,60,40,.7)'
-  g.lineWidth = 3
-  for (let i = 0; i <= 4; i++) { g.beginPath(); g.moveTo(i * 128, 0); g.lineTo(i * 128, 512); g.stroke(); g.beginPath(); g.moveTo(0, i * 128); g.lineTo(512, i * 128); g.stroke() }
   return c
 }
 
-// Painted door leaf: colour map (paint over faint wood grain, worn edges) + bump map for the carving
-function doorCanvases(pal) {
-  const CW = 512, CH = 1536
-  const ux = CW / DW, uy = CH / DH
-  const [c, g] = canvas(CW, CH)
-  const [b, k] = canvas(CW, CH)
-  const bg = g.createLinearGradient(0, 0, 0, CH)
-  bg.addColorStop(0, pal.base1)
-  bg.addColorStop(1, pal.base2)
-  g.fillStyle = bg
-  g.fillRect(0, 0, CW, CH)
-  // wood grain showing faintly through the paint
-  for (let i = 0; i < 320; i++) { g.fillStyle = `rgba(${rnd() < 0.5 ? '80,30,20' : '255,255,255'},${rnd() * 0.08})`; g.fillRect(rnd() * CW, 0, 0.6 + rnd() * 1.8, CH) }
-  for (let i = 0; i < 30; i++) {
-    g.strokeStyle = `rgba(70,25,15,${0.05 + rnd() * 0.06})`
-    g.lineWidth = 1
-    g.beginPath()
-    const x0 = rnd() * CW, amp = 3 + rnd() * 9, f = 0.004 + rnd() * 0.008
-    for (let y = 0; y <= CH; y += 24) { const x = x0 + Math.sin(y * f + i) * amp; y === 0 ? g.moveTo(x, y) : g.lineTo(x, y) }
-    g.stroke()
-  }
-  k.fillStyle = '#303030'
-  k.fillRect(0, 0, CW, CH)
-  for (let i = 0; i < 200; i++) { k.fillStyle = `rgba(${rnd() < 0.5 ? '255,255,255' : '0,0,0'},${rnd() * 0.12})`; k.fillRect(rnd() * CW, 0, 0.6 + rnd() * 1.6, CH) }
-  g.strokeStyle = pal.gold; g.lineWidth = 9; g.strokeRect(8, 8, CW - 16, CH - 16)
-  k.strokeStyle = '#fff'; k.lineWidth = 9; k.strokeRect(8, 8, CW - 16, CH - 16)
-
-  const m = 0.14, pw = (DW - 3 * m) / 2, ph = (DH - 0.8) / 3
-  for (let col = 0; col < 2; col++) {
-    for (let row = 0; row < 3; row++) {
-      const x0 = (m + col * (pw + m)) * ux
-      const w = pw * ux
-      const h = ph * uy
-      const y0 = CH - (0.2 + row * (ph + 0.2) + ph) * uy
-      const cx = x0 + w / 2, cy = y0 + h / 2
-      const path = (ctx, inset) => { ctx.beginPath(); ctx.roundRect(x0 + inset, y0 + inset, w - 2 * inset, h - 2 * inset, 22 - inset) }
-      const pg = g.createLinearGradient(x0, y0, x0 + w, y0 + h)
-      pg.addColorStop(0, pal.panel)
-      pg.addColorStop(1, pal.panel2)
-      path(g, 0); g.fillStyle = pg; g.fill()
-      g.lineWidth = 4; g.strokeStyle = 'rgba(60,20,20,.35)'; g.stroke()
-      path(g, 16); g.lineWidth = 3; g.strokeStyle = pal.accent; g.stroke()
-      path(k, 0); k.fillStyle = '#5a5a5a'; k.fill(); k.lineWidth = 7; k.strokeStyle = '#fff'; k.stroke()
-      path(k, 16); k.lineWidth = 4; k.strokeStyle = '#cfcfcf'; k.stroke()
-      const R = w * 0.4
-      for (let i = 0; i < 16; i++) {
-        const a = (i / 16) * Math.PI * 2
-        const px = cx + Math.cos(a) * R, py = cy + Math.sin(a) * R * 1.1
-        g.fillStyle = i % 2 ? pal.accent : pal.gold
-        g.beginPath(); g.arc(px, py, 6, 0, Math.PI * 2); g.fill()
-        k.fillStyle = '#fff'; k.beginPath(); k.arc(px, py, 6, 0, Math.PI * 2); k.fill()
-      }
-      for (const [fx, fy] of [[x0 + 38, y0 + 38], [x0 + w - 38, y0 + 38], [x0 + 38, y0 + h - 38], [x0 + w - 38, y0 + h - 38]]) {
-        flower(g, fx, fy, 14, pal.accent, pal.gold, 5)
-        flower(k, fx, fy, 14, '#fff', '#fff', 5)
-      }
+// seamless plaster: flat base + soft blotches drawn with wrap-around copies
+function plasterCanvas(c1, c2) {
+  const [c, g] = canvas(512, 512)
+  g.fillStyle = c1
+  g.fillRect(0, 0, 512, 512)
+  for (let i = 0; i < 70; i++) {
+    const x = rnd() * 512, y = rnd() * 512, r = 30 + rnd() * 90
+    const light = rnd() < 0.5
+    for (const dx of [-512, 0, 512]) for (const dy of [-512, 0, 512]) {
+      const m = g.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r)
+      m.addColorStop(0, light ? 'rgba(255,255,255,.07)' : c2)
+      m.addColorStop(1, 'rgba(0,0,0,0)')
+      g.fillStyle = m
+      g.fillRect(x + dx - r, y + dy - r, r * 2, r * 2)
     }
   }
-  // worn, slightly darker edges like real painted wood
-  const edge = g.createLinearGradient(0, 0, CW, 0)
-  edge.addColorStop(0, 'rgba(60,20,10,.28)')
-  edge.addColorStop(0.06, 'rgba(60,20,10,0)')
-  edge.addColorStop(0.94, 'rgba(60,20,10,0)')
-  edge.addColorStop(1, 'rgba(60,20,10,.28)')
-  g.fillStyle = edge
-  g.fillRect(0, 0, CW, CH)
-  return { color: c, bump: b }
+  for (let i = 0; i < 5000; i++) { g.fillStyle = `rgba(0,0,0,${rnd() * 0.07})`; g.fillRect(rnd() * 512, rnd() * 512, 1 + rnd() * 2, 1 + rnd() * 2) }
+  return c
 }
 
-// A kolam / rangoli mandala for the floor in front of the door
+// kavi: the red & white vertical stripes painted on the base of South Indian temple walls
+function kaviCanvas() {
+  const [c, g] = canvas(256, 256)
+  for (let x = 0; x < 256; x += 32) {
+    g.fillStyle = (x / 32) % 2 ? '#fbf3e4' : '#b3261e'
+    g.fillRect(x, 0, 32, 256)
+  }
+  for (let i = 0; i < 4000; i++) { g.fillStyle = `rgba(0,0,0,${rnd() * 0.1})`; g.fillRect(rnd() * 256, rnd() * 256, 1 + rnd() * 2, 1 + rnd() * 2) }
+  const sh = g.createLinearGradient(0, 0, 0, 256)
+  sh.addColorStop(0, 'rgba(255,255,255,.08)')
+  sh.addColorStop(1, 'rgba(0,0,0,.18)')
+  g.fillStyle = sh
+  g.fillRect(0, 0, 256, 256)
+  return c
+}
+
+// Kanchipuram-style silk drape: deep magenta with gold zari borders left/right and woven motifs
+function silkCanvas() {
+  const [c, g] = canvas(256, 1024)
+  const base = g.createLinearGradient(0, 0, 256, 0)
+  base.addColorStop(0, '#9c0f56')
+  base.addColorStop(0.5, '#c4186f')
+  base.addColorStop(1, '#8e0c4d')
+  g.fillStyle = base
+  g.fillRect(0, 0, 256, 1024)
+  for (let i = 0; i < 380; i++) { g.fillStyle = `rgba(255,${180 + rnd() * 60},${200 + rnd() * 50},${rnd() * 0.07})`; g.fillRect(rnd() * 256, 0, 1, 1024) }
+  for (const x0 of [0, 216]) {
+    g.fillStyle = '#d9a52b'
+    g.fillRect(x0, 0, 40, 1024)
+    g.fillStyle = '#7a0b42'
+    g.fillRect(x0 + (x0 ? 8 : 6), 0, 3, 1024)
+    g.fillRect(x0 + (x0 ? 29 : 31), 0, 3, 1024)
+    g.fillStyle = '#f6d672'
+    for (let y = 12; y < 1024; y += 26) {
+      g.beginPath()
+      g.moveTo(x0 + 20, y - 8); g.lineTo(x0 + 28, y); g.lineTo(x0 + 20, y + 8); g.lineTo(x0 + 12, y)
+      g.closePath(); g.fill()
+    }
+  }
+  for (let y = 40; y < 1024; y += 70) for (let x = 70; x < 200; x += 60) {
+    g.fillStyle = 'rgba(246,214,114,.85)'
+    g.beginPath(); g.arc(x + (y % 140 ? 0 : 30), y, 5, 0, Math.PI * 2); g.fill()
+  }
+  return c
+}
+
+function bananaLeafCanvas() {
+  const [c, g] = canvas(128, 512)
+  const grad = g.createLinearGradient(0, 0, 128, 0)
+  grad.addColorStop(0, '#2c8a37')
+  grad.addColorStop(0.5, '#5fcb54')
+  grad.addColorStop(1, '#2a8035')
+  g.fillStyle = grad
+  g.fillRect(0, 0, 128, 512)
+  g.strokeStyle = 'rgba(15,80,25,.55)'
+  g.lineWidth = 1
+  for (let y = 6; y < 512; y += 7) { g.beginPath(); g.moveTo(64, y); g.lineTo(0, y + 22); g.moveTo(64, y); g.lineTo(128, y + 22); g.stroke() }
+  g.strokeStyle = '#d7e8a0'
+  g.lineWidth = 4
+  g.beginPath(); g.moveTo(64, 0); g.lineTo(64, 512); g.stroke()
+  return c
+}
+
+function mangoLeafCanvas() {
+  const [c, g] = canvas(64, 128)
+  const grad = g.createLinearGradient(0, 0, 64, 0)
+  grad.addColorStop(0, '#176f3a'); grad.addColorStop(0.5, '#3fb36a'); grad.addColorStop(1, '#14602f')
+  g.fillStyle = grad
+  g.beginPath()
+  g.moveTo(32, 2); g.bezierCurveTo(70, 34, 66, 92, 32, 126); g.bezierCurveTo(-2, 92, -6, 34, 32, 2)
+  g.fill()
+  g.strokeStyle = 'rgba(190,235,170,.7)'; g.lineWidth = 2
+  g.beginPath(); g.moveTo(32, 4); g.lineTo(32, 124); g.stroke()
+  g.strokeStyle = 'rgba(8,60,26,.55)'; g.lineWidth = 1
+  for (let y = 18; y < 112; y += 11) { g.beginPath(); g.moveTo(32, y); g.lineTo(54, y + 12); g.moveTo(32, y); g.lineTo(10, y + 12); g.stroke() }
+  return c
+}
+
+// polished dark granite floor
+function graniteCanvas() {
+  const [c, g] = canvas(512, 512)
+  g.fillStyle = '#26211f'
+  g.fillRect(0, 0, 512, 512)
+  for (let i = 0; i < 9000; i++) {
+    g.fillStyle = rnd() < 0.5 ? `rgba(255,235,210,${rnd() * 0.16})` : `rgba(0,0,0,${rnd() * 0.3})`
+    g.fillRect(rnd() * 512, rnd() * 512, 1 + rnd() * 2.4, 1 + rnd() * 2.4)
+  }
+  g.strokeStyle = 'rgba(0,0,0,.65)'; g.lineWidth = 4
+  for (let i = 0; i <= 2; i++) { g.beginPath(); g.moveTo(i * 256, 0); g.lineTo(i * 256, 512); g.stroke(); g.beginPath(); g.moveTo(0, i * 256); g.lineTo(512, i * 256); g.stroke() }
+  return c
+}
+
+// vivid kolam / rangoli mandala
 function kolamCanvas() {
   const [c, g] = canvas(1024, 1024)
   g.translate(512, 512)
   const petal = (n, dist, rx, ry, fill) => {
     for (let k = 0; k < n; k++) {
-      g.save()
-      g.rotate((k / n) * Math.PI * 2)
-      g.translate(dist, 0)
-      g.beginPath()
-      g.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2)
-      g.fillStyle = fill
-      g.fill()
-      g.lineWidth = 3
-      g.strokeStyle = 'rgba(255,255,255,.95)'
-      g.stroke()
+      g.save(); g.rotate((k / n) * Math.PI * 2); g.translate(dist, 0)
+      g.beginPath(); g.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2)
+      g.fillStyle = fill; g.fill(); g.lineWidth = 3; g.strokeStyle = 'rgba(255,255,255,.95)'; g.stroke()
       g.restore()
     }
   }
-  g.beginPath()
-  g.arc(0, 0, 492, 0, Math.PI * 2)
-  g.fillStyle = 'rgba(255,255,255,.5)'
-  g.fill()
-  g.lineWidth = 7
-  g.strokeStyle = '#d4a02a'
-  g.stroke()
-  for (let k = 0; k < 56; k++) {
-    const a = (k / 56) * Math.PI * 2
-    g.beginPath()
-    g.arc(Math.cos(a) * 455, Math.sin(a) * 455, 6, 0, Math.PI * 2)
-    g.fillStyle = k % 2 ? '#f0508a' : '#3f98d8'
-    g.fill()
-  }
-  petal(28, 345, 78, 26, 'rgba(250,190,30,.96)')
-  petal(20, 240, 66, 30, 'rgba(240,90,150,.96)')
-  petal(12, 140, 56, 28, 'rgba(50,160,220,.96)')
-  petal(8, 62, 30, 15, 'rgba(255,255,255,.96)')
-  g.beginPath()
-  g.arc(0, 0, 26, 0, Math.PI * 2)
-  g.fillStyle = '#ff9f1c'
-  g.fill()
-  g.lineWidth = 3
-  g.strokeStyle = '#fff'
-  g.stroke()
-  return c
-}
-
-function leafCanvas() {
-  const [c, g] = canvas(64, 128)
-  const grad = g.createLinearGradient(0, 0, 64, 0)
-  grad.addColorStop(0, '#1b7d44')
-  grad.addColorStop(0.5, '#3fb36e')
-  grad.addColorStop(1, '#176f3a')
-  g.fillStyle = grad
-  g.beginPath()
-  g.moveTo(32, 2)
-  g.bezierCurveTo(70, 34, 66, 92, 32, 126)
-  g.bezierCurveTo(-2, 92, -6, 34, 32, 2)
-  g.fill()
-  g.strokeStyle = 'rgba(10,70,30,.8)'
-  g.lineWidth = 2
-  g.beginPath()
-  g.moveTo(32, 4)
-  g.lineTo(32, 124)
-  g.stroke()
-  g.lineWidth = 1
-  for (let y = 20; y < 110; y += 14) {
-    g.beginPath()
-    g.moveTo(32, y); g.lineTo(52, y + 12)
-    g.moveTo(32, y); g.lineTo(12, y + 12)
-    g.stroke()
-  }
+  g.beginPath(); g.arc(0, 0, 492, 0, Math.PI * 2); g.fillStyle = 'rgba(255,250,235,.22)'; g.fill()
+  g.lineWidth = 8; g.strokeStyle = '#f4b315'; g.stroke()
+  for (let k = 0; k < 64; k++) { const a = (k / 64) * Math.PI * 2; g.beginPath(); g.arc(Math.cos(a) * 455, Math.sin(a) * 455, 6, 0, Math.PI * 2); g.fillStyle = '#fff6e0'; g.fill() }
+  petal(28, 345, 78, 26, 'rgba(255,170,20,.97)')
+  petal(20, 240, 66, 30, 'rgba(225,40,110,.97)')
+  petal(12, 140, 56, 28, 'rgba(20,160,120,.97)')
+  petal(8, 62, 30, 15, 'rgba(255,250,235,.97)')
+  g.beginPath(); g.arc(0, 0, 26, 0, Math.PI * 2); g.fillStyle = '#e8412c'; g.fill(); g.lineWidth = 3; g.strokeStyle = '#fff'; g.stroke()
   return c
 }
 
 function glowCanvas() {
   const [c, g] = canvas(256, 256)
   const r = g.createRadialGradient(128, 128, 0, 128, 128, 128)
-  r.addColorStop(0, 'rgba(255,245,205,1)')
-  r.addColorStop(0.35, 'rgba(255,205,110,.55)')
-  r.addColorStop(1, 'rgba(255,180,70,0)')
+  r.addColorStop(0, 'rgba(255,246,210,1)')
+  r.addColorStop(0.35, 'rgba(255,200,100,.55)')
+  r.addColorStop(1, 'rgba(255,170,60,0)')
   g.fillStyle = r
   g.fillRect(0, 0, 256, 256)
   return c
 }
 
+// a teardrop candle/lamp flame: white-hot core, orange body, soft edges, faint blue base
+function flameCanvas() {
+  const [c, g] = canvas(64, 128)
+  const body = g.createLinearGradient(0, 4, 0, 122)
+  body.addColorStop(0, 'rgba(255,110,10,0)')
+  body.addColorStop(0.25, 'rgba(255,150,30,.75)')
+  body.addColorStop(0.6, 'rgba(255,215,90,.98)')
+  body.addColorStop(1, 'rgba(255,252,225,1)')
+  g.fillStyle = body
+  g.beginPath()
+  g.moveTo(32, 4)
+  g.bezierCurveTo(54, 46, 60, 86, 32, 122)
+  g.bezierCurveTo(4, 86, 10, 46, 32, 4)
+  g.fill()
+  const core = g.createRadialGradient(32, 96, 2, 32, 96, 26)
+  core.addColorStop(0, 'rgba(255,255,255,.95)')
+  core.addColorStop(1, 'rgba(255,255,255,0)')
+  g.fillStyle = core
+  g.fillRect(0, 60, 64, 68)
+  const blue = g.createRadialGradient(32, 118, 1, 32, 116, 11)
+  blue.addColorStop(0, 'rgba(90,130,255,.7)')
+  blue.addColorStop(1, 'rgba(90,130,255,0)')
+  g.fillStyle = blue
+  g.fillRect(14, 104, 36, 24)
+  return c
+}
+
+// A real marigold: a ruffled pom-pom of layered petals, built once as merged geometry with vertex colours
+function makeMarigold(c1, c2, c3) {
+  const parts = []
+  const rings = [[13, 0.6, 0.0, 0.5, c1], [11, 0.44, 0.1, 0.7, c2], [9, 0.29, 0.2, 0.9, c2], [6, 0.15, 0.3, 1.1, c3]]
+  const col = new THREE.Color()
+  const paint = (g, hex) => {
+    col.setHex(hex)
+    const n = g.attributes.position.count
+    const arr = new Float32Array(n * 3)
+    for (let k = 0; k < n; k++) { arr[k * 3] = col.r; arr[k * 3 + 1] = col.g; arr[k * 3 + 2] = col.b }
+    g.setAttribute('color', new THREE.BufferAttribute(arr, 3))
+  }
+  rings.forEach(([n, r, lift, tilt, hex], ri) => {
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + ri * 0.35
+      const g = new THREE.SphereGeometry(1, 6, 4)
+      g.scale(0.3, 0.12, 0.17) // long along x = one petal
+      g.rotateZ(tilt * 0.45) // tip lifts up
+      g.rotateY(-a) // point outward from the centre
+      g.translate(Math.cos(a) * r, lift, Math.sin(a) * r)
+      paint(g, hex)
+      parts.push(g)
+    }
+  })
+  const dome = new THREE.SphereGeometry(0.16, 8, 6)
+  dome.scale(1, 0.8, 1)
+  dome.translate(0, 0.3, 0)
+  paint(dome, c3)
+  parts.push(dome)
+  const merged = mergeGeometries(parts, false)
+  parts.forEach((p) => p.dispose())
+  merged.rotateX(Math.PI / 2) // flower face looks toward +Z, at the viewer
+  return merged
+}
+
+// feathered alpha mask: opaque in the middle, fading to transparent at the edges
+function softEdgeCanvas(w, h) {
+  const [c, g] = canvas(w, h)
+  g.fillStyle = '#000'
+  g.fillRect(0, 0, w, h)
+  const steps = 44
+  for (let i = 0; i < steps; i++) {
+    const k = i / (steps - 1)
+    const gray = Math.round(255 * Math.pow(k, 0.85))
+    g.fillStyle = 'rgb(' + gray + ',' + gray + ',' + gray + ')'
+    const inx = i * (w * 0.0035)
+    const iny = i * (h * 0.0035)
+    g.beginPath()
+    g.roundRect(inx, iny, w - inx * 2, h - iny * 2, Math.max(8, 46 - i))
+    g.fill()
+  }
+  return c
+}
+
 export function createDoorScene(container) {
-  const hq = new URLSearchParams(window.location.search).has('hq') // force full quality (testing)
+  const hq = new URLSearchParams(window.location.search).has('hq')
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' })
   const small = Math.min(window.innerWidth, window.innerHeight) < 600
   let dpr = Math.min(window.devicePixelRatio || 1, small ? 1.75 : 2)
@@ -280,12 +304,12 @@ export function createDoorScene(container) {
   const aniso = Math.min(8, renderer.capabilities.getMaxAnisotropy())
 
   const scene = new THREE.Scene()
-  scene.background = new THREE.Color(0xf3e1ec)
-  scene.fog = new THREE.FogExp2(0xf3e1ec, 0.005)
+  scene.background = new THREE.Color(0x2b1608)
+  scene.fog = new THREE.FogExp2(0x2b1608, 0.006)
   const pmrem = new THREE.PMREMGenerator(renderer)
   const envTex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture
   scene.environment = envTex
-  scene.environmentIntensity = 0.4
+  scene.environmentIntensity = 0.45
 
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 80)
 
@@ -294,238 +318,330 @@ export function createDoorScene(container) {
     const t = new THREE.CanvasTexture(cnv)
     if (srgb) t.colorSpace = THREE.SRGBColorSpace
     t.anisotropy = aniso
-    if (repeat) {
-      t.wrapS = t.wrapT = THREE.RepeatWrapping
-      t.repeat.set(repeat[0], repeat[1])
-    }
+    if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat[0], repeat[1]) }
     return t
   }
-  const brass = new THREE.MeshStandardMaterial({ color: 0xf0b83a, metalness: 1, roughness: 0.22, envMapIntensity: 1.8 })
-  const gilt = new THREE.MeshStandardMaterial({ color: 0xe6b440, metalness: 0.6, roughness: 0.34 })
-  const frameMat = new THREE.MeshStandardMaterial({ color: 0x139a9d, roughness: 0.34, metalness: 0.05, clearcoat: 0 })
-  const creamPaint = new THREE.MeshStandardMaterial({ color: 0xfff0d6, roughness: 0.55 })
-  const marble = new THREE.MeshStandardMaterial({ color: 0xfbeedd, roughness: 0.28, metalness: 0.04 })
-  const wallCnv = wallCanvases()
-  const wallFor = (w, h) =>
-    new THREE.MeshStandardMaterial({
-      map: tex(wallCnv.color, [w / 4.5, h / 4.5]),
-      bumpMap: tex(wallCnv.bump, [w / 2.2, h / 2.2], false),
-      bumpScale: 1.4,
-      roughness: 0.92,
-    })
+  const teakT = tex(teakCanvas())
+  const teak = new THREE.MeshStandardMaterial({ map: teakT, bumpMap: teakT, bumpScale: 2.5, roughness: 0.5, metalness: 0.04 })
+  const brass = new THREE.MeshStandardMaterial({ color: 0xf0b83a, metalness: 1, roughness: 0.24, envMapIntensity: 1.8 })
+  const silk = new THREE.MeshPhysicalMaterial({ map: tex(silkCanvas()), roughness: 0.42, sheen: 1, sheenColor: new THREE.Color(0xffa8d0), sheenRoughness: 0.35, side: THREE.DoubleSide })
+  const plasterCnv = plasterCanvas('#f2d6a0', 'rgba(150,95,40,.07)')
+  const kaviCnv = kaviCanvas()
+  const wallFor = (w, h, kavi) =>
+    new THREE.MeshStandardMaterial({ map: tex(kavi ? kaviCnv : plasterCnv, kavi ? [w / 1.4, h / 1.4] : [w / 4.5, h / 4.5]), roughness: 0.9 })
 
-  // ---------- helpers ----------
-  const add = (geo, mat, x, y, z, shadow = true, receive = true) => {
+  const add = (geo, mat, x, y, z, cast = true, recv = true) => {
     const m = new THREE.Mesh(geo, mat)
     m.position.set(x, y, z)
-    m.castShadow = shadow
-    m.receiveShadow = receive
+    m.castShadow = cast
+    m.receiveShadow = recv
     scene.add(m)
     return m
   }
   const addBox = (w, h, d, mat, x, y, z, r = 0.03) => add(rgeo(w, h, d, r), mat, x, y, z)
+  // ---------- real marigolds (ruffled, layered petals) ----------
+  const marigoldMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, emissive: 0x3a1800, emissiveIntensity: 0.55 })
+  const orangeGeo = makeMarigold(0xff9a1a, 0xff8200, 0xe85d04)
+  const yellowGeo = makeMarigold(0xffd23a, 0xffbf0a, 0xf59a00)
+  const dummy = new THREE.Object3D()
+  const col = new THREE.Color()
+  // place many marigolds at once: items = [{ p: Vector3, s: scale, yellow: bool, rz?: rotation }]
+  function marigolds(parent, items) {
+    const make = (geo, list) => {
+      if (!list.length) return
+      const im = new THREE.InstancedMesh(geo, marigoldMat, list.length)
+      list.forEach((it, i) => {
+        dummy.position.copy(it.p)
+        dummy.rotation.set((rnd() - 0.5) * 0.4, (rnd() - 0.5) * 0.4, it.rz ?? rnd() * Math.PI * 2)
+        dummy.scale.setScalar(it.s)
+        dummy.updateMatrix()
+        im.setMatrixAt(i, dummy.matrix)
+        const b = 0.86 + rnd() * 0.24
+        col.setRGB(b, b, b)
+        im.setColorAt(i, col)
+      })
+      im.frustumCulled = false
+      parent.add(im)
+    }
+    make(orangeGeo, items.filter((i) => !i.yellow))
+    make(yellowGeo, items.filter((i) => i.yellow))
+  }
 
-  // ---------- wall, pilasters, frame ----------
-  const wallD = 0.5
-  const jamb = 0.45
-  const wallSide = 9
-  const wallH = 16
-  const sideX = DW + jamb + wallSide / 2
-  const wallY = FLOOR_Y + wallH / 2
-  addBox(wallSide, wallH, wallD, wallFor(wallSide, wallH), -sideX, wallY, -0.2, 0.01)
-  addBox(wallSide, wallH, wallD, wallFor(wallSide, wallH), sideX, wallY, -0.2, 0.01)
-  const topH = wallH - DH - 0.55
-  addBox(2 * (DW + jamb), topH, wallD, wallFor(2 * (DW + jamb), topH), 0, FLOOR_Y + DH + 0.55 + topH / 2, -0.2, 0.01)
-
-  // skirting boards
-  for (const s of [-1, 1]) addBox(wallSide, 0.5, 0.12, frameMat, s * sideX, FLOOR_Y + 0.25, 0.1, 0.03)
-
-  // cream pilasters with gilded flutes, base and capital, either side of the entrance
-  const pilH = DH + 1.9
+  // ---------- temple wall: kavi stripes below, warm plaster above ----------
+  const stripeH = 3.0
+  const sideW = 16
+  const sideX = OPEN_W / 2 + 0.7 + sideW / 2 - 0.05
+  const wallTop = 15
   for (const s of [-1, 1]) {
-    const px = s * (DW + jamb + 0.62)
-    addBox(0.62, pilH, 0.42, creamPaint, px, FLOOR_Y + pilH / 2, 0.2, 0.05)
-    for (const f of [-0.18, -0.06, 0.06, 0.18]) addBox(0.035, pilH - 1.0, 0.03, gilt, px + f, FLOOR_Y + pilH / 2, 0.42, 0.01)
-    addBox(0.86, 0.3, 0.6, creamPaint, px, FLOOR_Y + 0.15, 0.2, 0.05)
-    addBox(0.9, 0.34, 0.62, creamPaint, px, FLOOR_Y + pilH + 0.0, 0.2, 0.06)
-    addBox(0.96, 0.07, 0.68, brass, px, FLOOR_Y + pilH + 0.2, 0.2, 0.02)
+    addBox(sideW, stripeH, 0.5, wallFor(sideW, stripeH, true), s * sideX, FLOOR_Y + stripeH / 2, -0.25, 0.01)
+    addBox(sideW, wallTop - stripeH, 0.5, wallFor(sideW, wallTop - stripeH, false), s * sideX, FLOOR_Y + stripeH + (wallTop - stripeH) / 2, -0.25, 0.01)
+    addBox(sideW, 0.12, 0.56, brass, s * sideX, FLOOR_Y + stripeH + 0.04, -0.2, 0.02)
   }
+  const aboveH = wallTop - (PILLAR_TOP - FLOOR_Y) - 0.6
+  addBox(2 * (OPEN_W / 2 + 0.7), aboveH, 0.5, wallFor(8, aboveH, false), 0, PILLAR_TOP + 0.6 + aboveH / 2, -0.25, 0.01)
 
-  // teal painted jambs + lintel, brass inlay, stepped cornice with dentils
-  const H2 = DH + 0.55
-  addBox(jamb, H2, 0.62, frameMat, -(DW + jamb / 2), FLOOR_Y + H2 / 2, 0.02, 0.04)
-  addBox(jamb, H2, 0.62, frameMat, DW + jamb / 2, FLOOR_Y + H2 / 2, 0.02, 0.04)
-  addBox(2 * (DW + jamb), 0.55, 0.62, frameMat, 0, FLOOR_Y + DH + 0.275, 0.02, 0.04)
+  // ---------- interior: warm golden corridor behind the curtain ----------
+  const inter = new THREE.MeshStandardMaterial({ map: tex(plasterCanvas('#efb350', 'rgba(150,80,10,.09)'), [2, 2]), roughness: 0.85, emissive: 0x6b3a08, emissiveIntensity: 0.5 })
   for (const s of [-1, 1]) {
-    addBox(0.06, H2, 0.05, brass, s * (DW + jamb - 0.04), FLOOR_Y + H2 / 2, 0.35, 0.015)
-    addBox(0.06, H2, 0.05, brass, s * (DW + 0.04), FLOOR_Y + H2 / 2, 0.35, 0.015)
+    const w = new THREE.Mesh(new THREE.PlaneGeometry(6, 8), inter)
+    w.rotation.y = -s * Math.PI / 2
+    w.position.set(s * (OPEN_W / 2 + 0.05), 0, -3.2)
+    scene.add(w)
   }
-  addBox(2 * (DW + jamb), 0.06, 0.05, brass, 0, FLOOR_Y + DH + 0.5, 0.35, 0.015)
-  const dentilY = FLOOR_Y + DH + 0.62
-  for (let x = -(DW + jamb) + 0.1; x <= DW + jamb - 0.05; x += 0.27) addBox(0.15, 0.13, 0.16, creamPaint, x, dentilY, 0.5, 0.02)
-  addBox(2 * (DW + jamb) + 0.5, 0.2, 0.85, frameMat, 0, FLOOR_Y + DH + 0.78, 0.1, 0.04)
-  addBox(2 * (DW + jamb) + 0.7, 0.07, 0.95, brass, 0, FLOOR_Y + DH + 0.92, 0.12, 0.02)
-
-  // marble threshold and two steps
-  addBox(2 * (DW + jamb) + 0.4, 0.2, 0.55, marble, 0, FLOOR_Y + 0.1, 0.38, 0.05)
-  addBox(2 * (DW + jamb) + 1.4, 0.12, 0.7, marble, 0, FLOOR_Y + 0.06, 0.95, 0.04)
-
-  // festive string lights that blink along the frame
-  const bulbGeo = new THREE.SphereGeometry(0.075, 14, 12)
-  const bulbMats = PASTEL.map((c) => new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 1.2, roughness: 0.25 }))
-  let bi = 0
-  const bulb = (x, y) => {
-    const b = new THREE.Mesh(bulbGeo, bulbMats[bi++ % bulbMats.length])
-    b.position.set(x, y, 0.37)
-    scene.add(b)
-  }
-  for (const s of [-1, 1]) for (let y = FLOOR_Y + 0.55; y < FLOOR_Y + DH + 0.4; y += 0.46) bulb(s * (DW + jamb / 2), y)
-  for (let x = -DW + 0.2; x <= DW - 0.2; x += 0.46) bulb(x, FLOOR_Y + DH + 0.275)
-
-  // ---------- door leaves: pink (left) and blue (right) ----------
-  const pals = {
-    '-1': { base1: '#ff8fb8', base2: '#e8598f', panel: '#ffcadd', panel2: '#ffaecb', accent: '#c92d78', gold: '#e0a526', lotus: [0xffe9f2, 0xffb3d0, 0xff4f92] },
-    1: { base1: '#6cb9f2', base2: '#3a88dc', panel: '#c6e4ff', panel2: '#a4d0f7', accent: '#1f6fc2', gold: '#e0a526', lotus: [0xe8f5ff, 0xa9d4f7, 0x2f8ae0] },
-  }
-  const leaves = []
-  const studGeo = new THREE.SphereGeometry(0.05, 16, 12)
-  const petalGeo = new THREE.SphereGeometry(0.1, 16, 12)
-  function lotus(parent, x, y, s, cols) {
-    const g = new THREE.Group()
-    g.position.set(x, y, DT / 2 + 0.07)
-    const mats = cols.map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.38 }))
-    const rings = [[14, 0.27, 2.0, 0.8], [10, 0.17, 1.6, 0.7], [7, 0.09, 1.2, 0.6]]
-    rings.forEach(([n, r, sx, sy], ri) => {
-      for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2 + ri * 0.2
-        const p = new THREE.Mesh(petalGeo, mats[ri])
-        p.position.set(Math.cos(a) * r * s, Math.sin(a) * r * s, ri * 0.035)
-        p.rotation.z = a
-        p.scale.set(sx * s, sy * s, 0.5 * s)
-        p.castShadow = true
-        g.add(p)
-      }
-    })
-    const boss = new THREE.Mesh(new THREE.SphereGeometry(0.075 * s, 18, 14), brass)
-    boss.position.z = 0.1 * s
-    boss.scale.z = 0.8
-    boss.castShadow = true
-    g.add(boss)
-    parent.add(g)
-  }
-  function buildLeaf(side) {
-    const pal = pals[side]
-    const { color, bump } = doorCanvases(pal)
-    const mat = new THREE.MeshStandardMaterial({ map: tex(color), bumpMap: tex(bump, null, false), bumpScale: 6, roughness: 0.4, metalness: 0.02 })
-    const pivot = new THREE.Group()
-    pivot.position.set(side * DW, 0, 0)
-    const leaf = new THREE.Group()
-    leaf.position.x = -side * (DW / 2)
-    pivot.add(leaf)
-
-    const slab = new THREE.Mesh(rgeo(DW, DH, DT, 0.025), mat)
-    slab.castShadow = slab.receiveShadow = true
-    leaf.add(slab)
-
-    const m = 0.14
-    const pw = (DW - 3 * m) / 2
-    const ph = (DH - 4 * 0.2) / 3
-    const t = 0.05
-    const railGeo = (w, h) => rgeo(w, h, 0.05, 0.015)
-    for (let col = 0; col < 2; col++) {
-      for (let row = 0; row < 3; row++) {
-        const x = -DW / 2 + m + pw / 2 + col * (pw + m)
-        const y = -DH / 2 + 0.2 + ph / 2 + row * (ph + 0.2)
-        // gilded moulding around each panel
-        for (const [w, h, dx, dy] of [[pw, t, 0, ph / 2 - t / 2], [pw, t, 0, -ph / 2 + t / 2], [t, ph, -pw / 2 + t / 2, 0], [t, ph, pw / 2 - t / 2, 0]]) {
-          const r = new THREE.Mesh(railGeo(w, h), gilt)
-          r.position.set(x + dx, y + dy, DT / 2 + 0.02)
-          r.castShadow = true
-          leaf.add(r)
-        }
-        lotus(leaf, x, y, row === 1 ? 1.15 : 0.9, pal.lotus)
-        for (const sx of [-1, 1]) {
-          for (const sy of [-1, 1]) {
-            const st = new THREE.Mesh(studGeo, brass)
-            st.position.set(x + sx * (pw / 2 - 0.13), y + sy * (ph / 2 - 0.13), DT / 2 + 0.05)
-            st.scale.z = 0.55
-            st.castShadow = true
-            leaf.add(st)
-          }
-        }
-      }
-    }
-    for (const y of [-1.0, 1.0]) {
-      const band = new THREE.Mesh(rgeo(DW, 0.13, 0.06, 0.02), brass)
-      band.position.set(0, y, DT / 2 + 0.035)
-      band.castShadow = true
-      leaf.add(band)
-    }
-    const strip = new THREE.Mesh(rgeo(0.09, DH, 0.08, 0.02), brass)
-    strip.position.set(-side * (DW / 2 - 0.045), 0, DT / 2 + 0.045)
-    strip.castShadow = true
-    leaf.add(strip)
-    // strap hinges + knuckles on the hinge edge
-    for (const hy of [-2.45, 0, 2.45]) {
-      const hinge = new THREE.Mesh(rgeo(0.95, 0.17, 0.05, 0.02), brass)
-      hinge.position.set(side * (DW / 2 - 0.5), hy, DT / 2 + 0.04)
-      hinge.castShadow = true
-      leaf.add(hinge)
-      for (const dx of [-0.3, 0, 0.3]) {
-        const hs = new THREE.Mesh(studGeo, brass)
-        hs.position.set(side * (DW / 2 - 0.5) + dx, hy, DT / 2 + 0.075)
-        hs.scale.set(0.8, 0.8, 0.5)
-        leaf.add(hs)
-      }
-      const knuckle = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.32, 18), brass)
-      knuckle.position.set(side * (DW / 2), hy, 0)
-      knuckle.castShadow = true
-      leaf.add(knuckle)
-    }
-    // ring pull on a brass boss
-    const plate = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.05, 28), brass)
-    plate.rotation.x = Math.PI / 2
-    plate.position.set(-side * (DW / 2 - 0.22), -0.02, DT / 2 + 0.12)
-    plate.castShadow = true
-    leaf.add(plate)
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.028, 16, 40), brass)
-    ring.position.set(-side * (DW / 2 - 0.22), -0.13, DT / 2 + 0.17)
-    ring.castShadow = true
-    leaf.add(ring)
-
-    scene.add(pivot)
-    leaves.push({ pivot, side })
-  }
-  buildLeaf(-1)
-  buildLeaf(1)
-
-  // ---------- floor: glossy tiles over a mirror, kolam and petals ----------
-  // polished tiles: low roughness + environment reflections give the glossy look
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(60, 60),
-    new THREE.MeshStandardMaterial({ map: tex(floorCanvas(), [9, 9]), roughness: 0.2, metalness: 0.06, envMapIntensity: 1.3 }),
+  const ceil = new THREE.Mesh(new THREE.PlaneGeometry(OPEN_W + 0.2, 6), new THREE.MeshStandardMaterial({ map: teakT, roughness: 0.6 }))
+  ceil.rotation.x = Math.PI / 2
+  ceil.position.set(0, PILLAR_TOP - 0.55, -3.2)
+  scene.add(ceil)
+  const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(OPEN_W + 0.4, 9), new THREE.MeshBasicMaterial({ color: 0xc8821e }))
+  backdrop.position.set(0, 0, -6.1)
+  scene.add(backdrop)
+  const glowT = tex(glowCanvas())
+  const glow = new THREE.Mesh(
+    new THREE.PlaneGeometry(9, 10),
+    new THREE.MeshBasicMaterial({ map: glowT, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }),
   )
+  glow.position.set(0, 0.2, -5.9)
+  scene.add(glow)
+  const inner = new THREE.PointLight(0xffd27a, 14, 0, 2)
+  inner.position.set(0, 1.4, -2.6)
+  scene.add(inner)
+
+  // ---------- teak pillars, beam, bells ----------
+  const pilFr = [[0.001, 0], [0.46, 0], [0.46, 0.02], [0.37, 0.035], [0.37, 0.075], [0.44, 0.09], [0.44, 0.105], [0.32, 0.12], [0.29, 0.2], [0.29, 0.3], [0.35, 0.33], [0.35, 0.36], [0.28, 0.38], [0.27, 0.5], [0.27, 0.62], [0.33, 0.65], [0.37, 0.69], [0.3, 0.72], [0.3, 0.75], [0.42, 0.78], [0.46, 0.8], [0.5, 0.83], [0.5, 0.88], [0.55, 0.9], [0.55, 0.97], [0.5, 0.98], [0.5, 1.0], [0.001, 1.0]]
+  const pilH = PILLAR_TOP - FLOOR_Y
+  const pilGeo = lathe(pilFr.map(([r, f]) => [r, f * pilH]), 40)
+  for (const s of [-1, 1]) {
+    const x = s * (OPEN_W / 2 + 0.35)
+    add(pilGeo, teak, x, FLOOR_Y, 0)
+    for (const f of [0.035, 0.895]) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(f < 0.5 ? 0.375 : 0.555, 0.028, 12, 40), brass)
+      ring.rotation.x = Math.PI / 2
+      ring.position.set(x, FLOOR_Y + f * pilH, 0)
+      ring.castShadow = true
+      scene.add(ring)
+    }
+    addBox(1.25, 0.1, 1.25, brass, x, PILLAR_TOP + 0.04, 0, 0.03)
+  }
+  addBox(2 * (OPEN_W / 2 + 0.95), 0.55, 0.95, teak, 0, BEAM_Y, 0, 0.05)
+  addBox(2 * (OPEN_W / 2 + 0.95) + 0.1, 0.07, 1.0, brass, 0, BEAM_Y + 0.31, 0, 0.02)
+  addBox(2 * (OPEN_W / 2 + 0.9), 0.06, 0.05, brass, 0, BEAM_Y - 0.12, 0.49, 0.015)
+  addBox(2 * (OPEN_W / 2 + 0.9), 0.06, 0.05, brass, 0, BEAM_Y + 0.12, 0.49, 0.015)
+  for (let x = -OPEN_W / 2 - 0.8; x <= OPEN_W / 2 + 0.8; x += 0.42) {
+    const knob = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), brass)
+    knob.position.set(x, BEAM_Y, 0.5)
+    scene.add(knob)
+  }
+  const bellGeo = lathe([[0.001, 0.3], [0.05, 0.29], [0.08, 0.22], [0.11, 0.12], [0.15, 0.02], [0.16, -0.02], [0.001, -0.02]], 24)
+  const bells = []
+  for (const x of [-3.5, -3.15, -2.8, 2.8, 3.15, 3.5]) {
+    const g = new THREE.Group()
+    g.position.set(x, BEAM_Y - 0.3, 0.62)
+    const chain = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.28, 6), brass)
+    chain.position.y = 0.16
+    g.add(chain)
+    const b = new THREE.Mesh(bellGeo, brass)
+    b.position.y = -0.3
+    b.castShadow = true
+    g.add(b)
+    scene.add(g)
+    bells.push({ g, ph: rnd() * 6 })
+  }
+
+  // ---------- marigold + jasmine garlands spiralling up each pillar ----------
+  const jasmineGeo = new THREE.SphereGeometry(1, 10, 8)
+  const jasmineMat = new THREE.MeshStandardMaterial({ roughness: 0.5, emissive: 0x2a2418, emissiveIntensity: 0.5 })
+  const FL = { jasmine: 0xfffaf0, marigold: 0xffa01a, yellow: 0xffc93a, rose: 0xf0426e, leaf: 0x3aa55a }
+  for (const s of [-1, 1]) {
+    const items = []
+    const jas = new THREE.InstancedMesh(jasmineGeo, jasmineMat, 90)
+    const n = 74
+    for (let i = 0; i < n; i++) {
+      const t = i / n
+      const a = t * Math.PI * 9 + (s > 0 ? 0 : 1.2)
+      items.push({ p: new THREE.Vector3(s * (OPEN_W / 2 + 0.35) + Math.cos(a) * 0.62, FLOOR_Y + 0.3 + t * (pilH - 0.6), Math.sin(a) * 0.62), s: 0.135, yellow: i % 2 === 1 })
+    }
+    for (let i = 0; i < 90; i++) {
+      const t = (i + 0.5) / 90
+      const a = t * Math.PI * 9 + (s > 0 ? 0 : 1.2) + 0.18
+      dummy.position.set(s * (OPEN_W / 2 + 0.35) + Math.cos(a) * 0.62, FLOOR_Y + 0.3 + t * (pilH - 0.6) + 0.04, Math.sin(a) * 0.62)
+      dummy.rotation.set(0, 0, 0)
+      dummy.scale.set(0.05, 0.065, 0.05)
+      dummy.updateMatrix()
+      jas.setMatrixAt(i, dummy.matrix)
+      col.setHex(FL.jasmine)
+      jas.setColorAt(i, col)
+    }
+    jas.frustumCulled = false
+    scene.add(jas)
+    marigolds(scene, items)
+  }
+
+  // ---------- flower curtain: strands of jasmine + marigold (parts when tapped) ----------
+  const strandMat = new THREE.MeshStandardMaterial({ roughness: 0.55, emissive: 0x2a1a08, emissiveIntensity: 0.6 })
+  const STRANDS = small ? 28 : 38
+  const PER = 50
+  const strands = []
+  const topY = PILLAR_TOP - 0.55
+  const spanX = OPEN_W / 2 - 0.1
+  for (let layer = 0; layer < 2; layer++) {
+    for (let i = 0; i < STRANDS; i++) {
+      const x0 = -spanX + ((i + layer * 0.5) / (STRANDS - 0.5)) * spanX * 2
+      const g = new THREE.Group()
+      g.position.set(x0, topY, 0.2 + layer * 0.16)
+      const im = new THREE.InstancedMesh(jasmineGeo, strandMat, PER)
+      for (let k = 0; k < PER; k++) {
+        const kind = (k + i * 3 + layer * 2) % 9
+        let c = FL.jasmine, sc = 0.068 + rnd() * 0.016, sy = 1.45
+        if (kind === 3) { c = FL.marigold; sc = 0.092; sy = 0.95 }
+        else if (kind === 6) { c = i % 3 ? FL.yellow : FL.rose; sc = 0.088; sy = 0.95 }
+        else if (kind === 0) { c = FL.leaf; sc = 0.06; sy = 1.8 }
+        dummy.position.set((rnd() - 0.5) * 0.03, -k * 0.125 - 0.05, (rnd() - 0.5) * 0.03)
+        dummy.rotation.set(0, rnd() * 3, 0)
+        dummy.scale.set(sc, sc * sy, sc)
+        dummy.updateMatrix()
+        im.setMatrixAt(k, dummy.matrix)
+        col.setHex(c)
+        im.setColorAt(k, col)
+      }
+      im.frustumCulled = false
+      g.add(im)
+      const thread = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, PER * 0.125, 4), new THREE.MeshBasicMaterial({ color: 0xc9b27a }))
+      thread.position.y = -(PER * 0.125) / 2
+      g.add(thread)
+      scene.add(g)
+      strands.push({ g, x0, ph: rnd() * 6, f: Math.abs(x0) / spanX })
+    }
+  }
+
+  // ---------- silk drapes tied back at the pillars ----------
+  function drape(side) {
+    const w = 1.5, h = 6.7
+    const geo = new THREE.PlaneGeometry(w, h, 16, 52)
+    const p = geo.attributes.position
+    for (let i = 0; i < p.count; i++) {
+      const u = p.getX(i) / w + 0.5
+      const t = p.getY(i) / h + 0.5
+      const cinch = 1 - 0.58 * Math.exp(-Math.pow((t - 0.42) / 0.08, 2))
+      const fan = 1 + 0.2 * (1 - t) * (1 - t)
+      const pleat = Math.sin(u * Math.PI * 9) * (0.05 + 0.07 * (1 - cinch)) + Math.sin(u * Math.PI * 4 + t * 3) * 0.03
+      p.setX(i, p.getX(i) * cinch * fan * (0.55 + 0.45 * t))
+      p.setZ(i, pleat)
+    }
+    geo.computeVertexNormals()
+    const m = new THREE.Mesh(geo, silk)
+    m.position.set(side * (OPEN_W / 2 - 0.45), PILLAR_TOP - 0.55 - h / 2 + 0.4, 0.7)
+    m.castShadow = true
+    m.receiveShadow = true
+    scene.add(m)
+    const cy = m.position.y + (0.42 - 0.5) * h
+    const cord = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.03, 10, 28), brass)
+    cord.position.set(side * (OPEN_W / 2 - 0.45), cy, 0.78)
+    cord.rotation.x = Math.PI / 2
+    scene.add(cord)
+    const tassel = new THREE.Group()
+    tassel.position.set(side * (OPEN_W / 2 - 0.45), cy - 0.2, 0.9)
+    tassel.add(new THREE.Mesh(new THREE.SphereGeometry(0.07, 14, 12), brass))
+    const skirt = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.3, 16, 1, true), silk)
+    skirt.position.y = -0.18
+    tassel.add(skirt)
+    scene.add(tassel)
+  }
+  drape(-1)
+  drape(1)
+
+  // ---------- toran: a heavy garland of REAL marigolds with mango leaves hanging below ----------
+  const mangoMat = new THREE.MeshStandardMaterial({ map: tex(mangoLeafCanvas()), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.5 })
+  const mangoGeo = new THREE.PlaneGeometry(0.3, 0.66, 2, 8)
+  mangoGeo.translate(0, -0.33, 0)
+  {
+    const lp = mangoGeo.attributes.position
+    for (let i = 0; i < lp.count; i++) { const t = -lp.getY(i) / 0.66; lp.setZ(i, 0.07 * t * t - Math.abs(lp.getX(i)) * 0.18 * t) } // curl like a real leaf
+    mangoGeo.computeVertexNormals()
+  }
+  const toranY = BEAM_Y - 0.28
+  const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(-OPEN_W / 2 - 0.8, toranY, 0.62), new THREE.Vector3(0, toranY - 0.85, 0.72), new THREE.Vector3(OPEN_W / 2 + 0.8, toranY, 0.62))
+  scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 50, 0.03, 6, false), new THREE.MeshStandardMaterial({ color: 0x7a4a14, roughness: 0.8 })))
+  const toran = []
+  for (let i = 0; i < 36; i++) {
+    const l = new THREE.Mesh(mangoGeo, mangoMat)
+    l.position.copy(curve.getPoint((i + 0.5) / 36))
+    l.position.z += 0.02 + (i % 2) * 0.03
+    l.position.y -= 0.03
+    const sc = 0.85 + rnd() * 0.35
+    l.scale.set(sc, sc, 1)
+    l.castShadow = true
+    scene.add(l)
+    toran.push({ mesh: l, base: (rnd() - 0.5) * 0.12, ph: rnd() * 6 })
+  }
+  {
+    const items = []
+    for (let i = 0; i < 64; i++) {
+      const p = curve.getPoint((i + 0.5) / 64)
+      items.push({ p: new THREE.Vector3(p.x, p.y + 0.02 + (i % 2) * 0.05, p.z + 0.07 + (i % 2) * 0.03), s: 0.15 - (i % 2) * 0.02, yellow: i % 3 === 1 })
+    }
+    marigolds(scene, items)
+  }
+
+  // ---------- valaikappu: glass bangles hanging from the beam ----------
+  const bangleGeo = new THREE.TorusGeometry(0.14, 0.02, 12, 36)
+  const BANGLE = [0xd7263d, 0x1f9d55, 0xf2b705, 0xe83e8c, 0x1e6fd9, 0x7b3fe4]
+  const bangleMats = BANGLE.map((c) => new THREE.MeshPhysicalMaterial({ color: c, roughness: 0.08, metalness: 0.35, clearcoat: 1, clearcoatRoughness: 0.05, envMapIntensity: 1.8 }))
+  const bangleGroups = []
+  for (const x of [-1.5, -0.55, 0.55, 1.5]) {
+    const g = new THREE.Group()
+    g.position.set(x, BEAM_Y - 0.28, 0.66)
+    const thread = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.45, 5), brass)
+    thread.position.y = -0.22
+    g.add(thread)
+    for (let k = 0; k < 9; k++) {
+      const b = new THREE.Mesh(bangleGeo, bangleMats[(k + Math.abs(Math.round(x * 3))) % bangleMats.length])
+      b.position.set(Math.sin(k * 1.4) * 0.015, -0.45 - k * 0.07, 0)
+      b.rotation.set(0.12 * Math.sin(k), 0.2 * Math.cos(k * 1.7), 0)
+      b.castShadow = true
+      g.add(b)
+    }
+    scene.add(g)
+    bangleGroups.push({ g, ph: rnd() * 6 })
+  }
+
+  // ---------- after the curtain opens: the illustrated thottil hangs in the golden light ----------
+  const thottil = new THREE.Group()
+  thottil.position.set(0, 0.55, -2.7)
+  scene.add(thottil)
+  const THOTTIL_W = 3.3
+  // warm tint: the picture's cream background melts into the golden corridor instead of showing as a pale patch
+  const thottilMat = new THREE.MeshBasicMaterial({ color: 0xffd98e, transparent: true, opacity: 0, alphaMap: tex(softEdgeCanvas(256, 180), null, false), depthWrite: false, fog: false })
+  const thottilMesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), thottilMat)
+  thottilMesh.scale.set(THOTTIL_W, THOTTIL_W * 0.7, 1)
+  thottil.add(thottilMesh)
+  new THREE.TextureLoader().load('/photos/thottil.jpg', (t) => {
+    t.colorSpace = THREE.SRGBColorSpace
+    t.anisotropy = aniso
+    thottilMat.map = t
+    thottilMat.opacity = 1
+    thottilMat.needsUpdate = true
+    thottilMesh.scale.set(THOTTIL_W, THOTTIL_W * (t.image.height / t.image.width), 1)
+  })
+
+  // ---------- floor, kolam, scattered petals ----------
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ map: tex(graniteCanvas(), [8, 8]), roughness: 0.2, metalness: 0.1, envMapIntensity: 1.4 }))
   floor.rotation.x = -Math.PI / 2
   floor.position.y = FLOOR_Y
   floor.receiveShadow = true
   scene.add(floor)
-  const kolam = new THREE.Mesh(
-    new THREE.PlaneGeometry(8.4, 8.4),
-    new THREE.MeshStandardMaterial({ map: tex(kolamCanvas()), transparent: true, roughness: 0.5 }),
-  )
+  const kolam = new THREE.Mesh(new THREE.PlaneGeometry(9.6, 9.6), new THREE.MeshStandardMaterial({ map: tex(kolamCanvas()), transparent: true, roughness: 0.5 }))
   kolam.rotation.x = -Math.PI / 2
-  kolam.position.set(0, FLOOR_Y + 0.012, 5.2)
+  kolam.position.set(0, FLOOR_Y + 0.012, 5.4)
   kolam.receiveShadow = true
   scene.add(kolam)
-  const petalFloor = new THREE.PlaneGeometry(0.2, 0.3)
+  const petalFloor = new THREE.CircleGeometry(0.1, 12)
+  petalFloor.scale(0.8, 1.35, 1)
   petalFloor.rotateX(-Math.PI / 2)
-  const petals = new THREE.InstancedMesh(petalFloor, new THREE.MeshStandardMaterial({ roughness: 0.7, side: THREE.DoubleSide }), 50)
-  const pc = [0xf4b315, 0xff9f1c, 0xffd23f, 0xe0457b, 0xff8fb8]
-  const dummy = new THREE.Object3D()
-  for (let i = 0; i < 50; i++) {
-    const a = rnd() * Math.PI * 2
-    const r = 2.2 + rnd() * 4.6
-    dummy.position.set(Math.cos(a) * r * 0.85, FLOOR_Y + 0.02 + rnd() * 0.03, 5.2 + Math.sin(a) * r * 0.7)
+  const petals = new THREE.InstancedMesh(petalFloor, new THREE.MeshStandardMaterial({ roughness: 0.7, side: THREE.DoubleSide }), 60)
+  const pc = [0xffa01a, 0xffc93a, 0xf0426e, 0xfffaf0]
+  for (let i = 0; i < 60; i++) {
+    const a = rnd() * Math.PI * 2, r = 1.5 + rnd() * 5.2
+    dummy.position.set(Math.cos(a) * r * 0.9, FLOOR_Y + 0.02 + rnd() * 0.03, 5.0 + Math.sin(a) * r * 0.7)
     dummy.rotation.set(0, rnd() * Math.PI * 2, (rnd() - 0.5) * 0.3)
     dummy.scale.setScalar(0.7 + rnd() * 0.7)
     dummy.updateMatrix()
@@ -534,198 +650,202 @@ export function createDoorScene(container) {
   }
   scene.add(petals)
 
-  // ---------- mango-leaf & marigold toran ----------
-  const leafMat = new THREE.MeshStandardMaterial({ map: tex(leafCanvas()), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.55 })
-  const leafGeo = new THREE.PlaneGeometry(0.3, 0.62)
-  leafGeo.translate(0, -0.31, 0)
-  const toranY = FLOOR_Y + DH + 0.38
-  const curve = new THREE.QuadraticBezierCurve3(
-    new THREE.Vector3(-DW - 0.25, toranY, 0.62),
-    new THREE.Vector3(0, toranY - 0.9, 0.7),
-    new THREE.Vector3(DW + 0.25, toranY, 0.62),
-  )
-  scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.022, 6, false), new THREE.MeshStandardMaterial({ color: 0x8a5a1a, roughness: 0.8 })))
-  const toran = []
-  const LEAVES = 23
-  for (let i = 0; i < LEAVES; i++) {
-    const t = (i + 0.5) / LEAVES
-    const l = new THREE.Mesh(leafGeo, leafMat)
-    l.position.copy(curve.getPoint(t))
-    l.position.z += (i % 2) * 0.03
-    const sc = 0.85 + rnd() * 0.3
-    l.scale.set(sc, sc, 1)
-    l.castShadow = true
-    scene.add(l)
-    toran.push({ mesh: l, base: (rnd() - 0.5) * 0.12, ph: rnd() * 6 })
+  // ---------- plantain (banana) trees flanking the entrance ----------
+  const bananaMat = new THREE.MeshStandardMaterial({ map: tex(bananaLeafCanvas()), side: THREE.DoubleSide, roughness: 0.55 })
+  function bananaLeafGeo(len, wid, bend) {
+    const g = new THREE.PlaneGeometry(wid, len, 6, 20)
+    const p = g.attributes.position
+    const R = len / bend
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i)
+      const t = (p.getY(i) + len / 2) / len
+      const a = bend * t
+      const droop = x * x * 0.55 * t
+      p.setXYZ(i, x * (1 - 0.3 * t * t), R * Math.sin(a) - droop * 0.5, R * (1 - Math.cos(a)) + droop * 0.25)
+    }
+    g.computeVertexNormals()
+    return g
   }
-  const marigold = new THREE.InstancedMesh(new THREE.SphereGeometry(0.085, 14, 10), new THREE.MeshStandardMaterial({ roughness: 0.6 }), 76)
-  for (let i = 0; i < 76; i++) {
-    const p = curve.getPoint((i + 0.5) / 76)
-    dummy.position.set(p.x, p.y + 0.012 + rnd() * 0.02, p.z + 0.03 + (i % 2) * 0.04)
-    dummy.rotation.set(0, 0, 0)
-    dummy.scale.setScalar(0.8 + rnd() * 0.45)
-    dummy.updateMatrix()
-    marigold.setMatrixAt(i, dummy.matrix)
-    marigold.setColorAt(i, new THREE.Color(i % 9 === 0 ? 0xff7a9c : i % 2 ? 0xffa81a : 0xffc93d))
-  }
-  scene.add(marigold)
-
-  // ---------- pastel bunting ----------
-  const buntY = FLOOR_Y + DH + 2.1
-  const buntCurve = new THREE.QuadraticBezierCurve3(
-    new THREE.Vector3(-6.6, buntY, 0.3),
-    new THREE.Vector3(0, buntY - 1.1, 0.35),
-    new THREE.Vector3(6.6, buntY, 0.3),
-  )
-  scene.add(new THREE.Mesh(new THREE.TubeGeometry(buntCurve, 50, 0.02, 6, false), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 })))
-  const flagGeo = new THREE.BufferGeometry()
-  flagGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-0.27, 0, 0, 0.27, 0, 0, 0, -0.7, 0]), 3))
-  flagGeo.computeVertexNormals()
-  const flags = []
-  for (let i = 0; i < 19; i++) {
-    const f = new THREE.Mesh(flagGeo, new THREE.MeshStandardMaterial({ color: PASTEL[i % PASTEL.length], side: THREE.DoubleSide, roughness: 0.85 }))
-    f.position.copy(buntCurve.getPoint((i + 0.5) / 19))
-    f.castShadow = true
-    scene.add(f)
-    flags.push({ mesh: f, ph: rnd() * 6 })
+  const trees = []
+  for (const s of [-1, 1]) {
+    const tree = new THREE.Group()
+    tree.position.set(s * 4.7, FLOOR_Y, 1.4)
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.24, 2.7, 16), new THREE.MeshStandardMaterial({ color: 0xa6cf86, roughness: 0.75 }))
+    trunk.position.y = 1.35
+    trunk.castShadow = true
+    tree.add(trunk)
+    const crown = new THREE.Group()
+    crown.position.y = 2.65
+    for (let k = 0; k < 7; k++) {
+      const leaf = new THREE.Mesh(bananaLeafGeo(3.2 + rnd() * 0.8, 1.0, 1.4 + rnd() * 0.5), bananaMat)
+      const holder = new THREE.Group()
+      holder.rotation.y = (k / 7) * Math.PI * 2 + s * 0.3
+      holder.rotation.x = -0.15 - rnd() * 0.25
+      leaf.rotation.x = -0.05
+      leaf.castShadow = true
+      holder.add(leaf)
+      crown.add(holder)
+    }
+    tree.add(crown)
+    scene.add(tree)
+    trees.push({ crown, ph: rnd() * 6 })
   }
 
-  // ---------- gift boxes with helium balloons tied on ----------
-  function giftBox(x, z, color, ribbon) {
-    const g = new THREE.Group()
-    g.position.set(x, FLOOR_Y + 0.3, z)
-    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.45 })
-    const rmat = new THREE.MeshStandardMaterial({ color: ribbon, roughness: 0.3, metalness: 0.2 })
-    const box = new THREE.Mesh(rgeo(0.7, 0.6, 0.7, 0.04), mat)
-    box.castShadow = box.receiveShadow = true
-    g.add(box)
-    for (const [w, d] of [[0.74, 0.12], [0.12, 0.74]]) {
-      const r = new THREE.Mesh(rgeo(w, 0.62, d, 0.015), rmat)
-      r.castShadow = true
-      g.add(r)
-    }
-    for (const sgn of [-1, 1]) {
-      const bow = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.035, 10, 24), rmat)
-      bow.position.set(sgn * 0.1, 0.38, 0)
-      bow.rotation.y = Math.PI / 2
-      bow.rotation.z = sgn * 0.5
-      bow.castShadow = true
-      g.add(bow)
-    }
-    scene.add(g)
-    return new THREE.Vector3(x, FLOOR_Y + 0.62, z)
+  // ---------- lit flames (sprites) used by the lamps and diyas ----------
+  const flameT = tex(flameCanvas())
+  const flameMat = new THREE.SpriteMaterial({ map: flameT, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })
+  const haloMat = new THREE.SpriteMaterial({ map: glowT, color: 0xffa83a, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8 })
+  const flames = []
+  function flame(parent, x, y, z, w, h, haloS) {
+    const f = new THREE.Sprite(flameMat)
+    f.center.set(0.5, 0.06)
+    f.scale.set(w, h, 1)
+    f.position.set(x, y, z)
+    parent.add(f)
+    const hl = new THREE.Sprite(haloMat)
+    hl.scale.setScalar(haloS)
+    hl.position.set(x, y + h * 0.35, z)
+    parent.add(hl)
+    flames.push({ f, hl, w, h, hs: haloS, ph: rnd() * 10 })
   }
-  const anchors = {
-    L: giftBox(-3.9, 1.5, 0xf58fb4, 0xffe27a),
-    R: giftBox(3.9, 1.5, 0x7cc4f5, 0xfff3c4),
-  }
-  const balloons = []
-  const knotGeo = new THREE.ConeGeometry(0.06, 0.12, 12)
-  const spec = [
-    [-4.1, 0.9, 1.0, 0xff8fb8, 'L'], [-3.4, 2.6, 0.9, 0x7cc4f5, 'L'], [-4.5, -0.7, 0.8, 0xffe27a, 'L'], [-3.3, 0.2, 1.5, 0x8ee3c4, 'L'],
-    [4.1, 1.1, 1.0, 0x7cc4f5, 'R'], [3.4, 2.7, 0.9, 0xff8fb8, 'R'], [4.5, -0.6, 0.8, 0xc9a7ff, 'R'], [3.3, 0.3, 1.5, 0xffe27a, 'R'],
-  ]
-  for (const [x, y, z, col, a] of spec) {
+
+  // tall brass kuthuvilakku lamps
+  const lampGeo = lathe([[0.001, 0], [0.42, 0], [0.42, 0.05], [0.3, 0.12], [0.1, 0.3], [0.09, 0.45], [0.16, 0.5], [0.09, 0.56], [0.09, 0.9], [0.15, 0.95], [0.09, 1.0], [0.09, 1.4], [0.2, 1.5], [0.12, 1.58], [0.12, 1.7], [0.38, 1.82], [0.42, 1.9], [0.38, 1.95], [0.001, 1.95]], 40)
+  for (const s of [-1, 1]) {
     const g = new THREE.Group()
-    g.position.set(x, y, z)
-    const mat = new THREE.MeshPhysicalMaterial({ color: col, roughness: 0.16, clearcoat: 1, clearcoatRoughness: 0.08, sheen: 0.4, sheenColor: new THREE.Color(0xffffff), envMapIntensity: 1.4 })
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.44, 36, 28), mat)
-    body.scale.set(1, 1.17, 1)
-    body.castShadow = true
-    g.add(body)
-    const knot = new THREE.Mesh(knotGeo, mat)
-    knot.position.y = -0.55
-    knot.rotation.x = Math.PI
-    g.add(knot)
+    g.position.set(s * 3.15, FLOOR_Y, 2.2)
+    const lamp = new THREE.Mesh(lampGeo, brass)
+    lamp.castShadow = true
+    g.add(lamp)
+    for (let k = 0; k < 5; k++) {
+      const a = (k / 5) * Math.PI * 2
+      const cup = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), brass)
+      cup.position.set(Math.cos(a) * 0.3, 1.97, Math.sin(a) * 0.3)
+      g.add(cup)
+      flame(g, Math.cos(a) * 0.3, 2.0, Math.sin(a) * 0.3, 0.12, 0.3, 0.55)
+    }
+    const light = new THREE.PointLight(0xff9a3c, 9, 9, 2)
+    light.position.set(0, 2.3, 0)
+    g.add(light)
+    flames.push({ light, ph: rnd() * 10 })
     scene.add(g)
-    const pts = new Float32Array(12)
-    const sg = new THREE.BufferGeometry()
-    sg.setAttribute('position', new THREE.BufferAttribute(pts, 3))
-    const line = new THREE.Line(sg, new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 }))
-    line.frustumCulled = false
-    scene.add(line)
-    balloons.push({ g, y0: y, ph: rnd() * 6, anchor: anchors[a], line, pts })
+  }
+
+  // clay diyas: terracotta bowls with oil, a wick and a lit flame, ringed with marigolds
+  const diyaGeo = lathe([[0.001, 0], [0.13, 0], [0.2, 0.03], [0.25, 0.08], [0.27, 0.12], [0.23, 0.115], [0.2, 0.07], [0.001, 0.06]], 28)
+  const clay = new THREE.MeshStandardMaterial({ color: 0xb4532a, roughness: 0.85, bumpMap: teakT, bumpScale: 1 })
+  const oil = new THREE.MeshStandardMaterial({ color: 0xe8b04a, roughness: 0.1, metalness: 0.3, emissive: 0x6a3a00, emissiveIntensity: 0.6 })
+  const wick = new THREE.MeshStandardMaterial({ color: 0x2a1a10, roughness: 1 })
+  const diyaMarigolds = []
+  const placeDiya = (x, z, sc) => {
+    const g = new THREE.Group()
+    g.position.set(x, FLOOR_Y + 0.012, z)
+    g.scale.setScalar(sc)
+    const bowl = new THREE.Mesh(diyaGeo, clay)
+    bowl.castShadow = true
+    g.add(bowl)
+    const o = new THREE.Mesh(new THREE.CircleGeometry(0.2, 20), oil)
+    o.rotation.x = -Math.PI / 2
+    o.position.y = 0.075
+    g.add(o)
+    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.1, 6), wick)
+    w.position.set(0.18, 0.1, 0)
+    w.rotation.z = -0.5
+    g.add(w)
+    flame(g, 0.22, 0.12, 0, 0.2, 0.42, 0.62)
+    scene.add(g)
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2 + 0.3
+      diyaMarigolds.push({ p: new THREE.Vector3(x + Math.cos(a) * 0.36 * sc, FLOOR_Y + 0.06, z + Math.sin(a) * 0.36 * sc), s: 0.07, yellow: k % 2 === 0, rz: a })
+    }
+  }
+  for (let i = 0; i < 11; i++) {
+    const a = -1.35 + (i / 10) * 2.7
+    if (Math.abs(a) > 0.32 && Math.abs(a) < 0.5) continue // keep clear of the kalasams
+    placeDiya(Math.sin(a) * 4.6, 5.4 - Math.cos(a) * 4.6, 0.85)
+  }
+  for (const s of [-1, 1]) { placeDiya(s * 2.45, 1.7, 0.8); placeDiya(s * 0.9, 3.0, 0.8) }
+  // lay the diya marigolds flat on the floor (their faces point up)
+  {
+    const flat = new THREE.Group()
+    flat.rotation.x = -Math.PI / 2
+    // convert world-space items to the rotated parent's space
+    const conv = diyaMarigolds.map((it) => ({ ...it, p: new THREE.Vector3(it.p.x, -it.p.z, it.p.y) }))
+    marigolds(flat, conv)
+    scene.add(flat)
+  }
+
+  // kalasams: brass pots with mango leaves, a coconut and a garland of marigolds
+  const potGeo = lathe([[0.001, 0], [0.2, 0], [0.3, 0.1], [0.34, 0.3], [0.28, 0.55], [0.2, 0.66], [0.23, 0.72], [0.3, 0.78], [0.26, 0.8], [0.001, 0.8]], 32)
+  const coconutMat = new THREE.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.9 })
+  for (const s of [-1, 1]) {
+    const g = new THREE.Group()
+    g.position.set(s * 1.75, FLOOR_Y, 3.1)
+    const pot = new THREE.Mesh(potGeo, brass)
+    pot.castShadow = true
+    g.add(pot)
+    for (let k = 0; k < 7; k++) {
+      const a = (k / 7) * Math.PI * 2
+      const lf = new THREE.Mesh(mangoGeo, mangoMat)
+      lf.scale.set(1.1, -1.1, 1)
+      lf.position.set(Math.cos(a) * 0.2, 0.86, Math.sin(a) * 0.2)
+      lf.rotation.order = 'YXZ'
+      lf.rotation.x = -0.9
+      lf.rotation.y = -a + Math.PI / 2
+      g.add(lf)
+    }
+    const coco = new THREE.Mesh(new THREE.SphereGeometry(0.2, 20, 16), coconutMat)
+    coco.scale.y = 1.12
+    coco.position.y = 0.98
+    coco.castShadow = true
+    g.add(coco)
+    const kumkum = new THREE.Mesh(new THREE.CircleGeometry(0.07, 16), new THREE.MeshBasicMaterial({ color: 0xd1252b }))
+    kumkum.position.set(0, 0.98, 0.205)
+    g.add(kumkum)
+    const neck = []
+    for (let k = 0; k < 9; k++) {
+      const a = (k / 9) * Math.PI * 2
+      neck.push({ p: new THREE.Vector3(Math.cos(a) * 0.3, 0.58, Math.sin(a) * 0.3), s: 0.07, yellow: k % 2 === 0 })
+    }
+    marigolds(g, neck)
+    scene.add(g)
   }
 
   // ---------- lights ----------
-  scene.add(new THREE.HemisphereLight(0xfff3e2, 0xe9c2b4, 0.5))
-  const key = new THREE.SpotLight(0xffeccc, 200, 0, 0.62, 0.9, 2)
-  key.position.set(3.5, 7.5, 10)
+  scene.add(new THREE.HemisphereLight(0xffe9c8, 0x3a1d0c, 0.5))
+  const key = new THREE.SpotLight(0xffe2b0, 230, 0, 0.62, 0.9, 2)
+  key.position.set(3.5, 8, 10)
   key.target.position.set(0, 0, 0)
   key.castShadow = true
   key.shadow.mapSize.set(small ? 1024 : 2048, small ? 1024 : 2048)
   key.shadow.bias = -0.0004
   key.shadow.radius = 4
   scene.add(key, key.target)
-  const fill = new THREE.DirectionalLight(0xb9c8ff, 0.35)
-  fill.position.set(-6, 3, 6)
-  scene.add(fill)
+  const rim = new THREE.DirectionalLight(0x9bb4ff, 0.35)
+  rim.position.set(-6, 4, 6)
+  scene.add(rim)
 
-  const glowT = tex(glowCanvas())
-  const backdrop = new THREE.Mesh(new THREE.PlaneGeometry(14, 16), new THREE.MeshBasicMaterial({ color: 0x80593a }))
-  backdrop.position.set(0, 0, -2.5)
-  scene.add(backdrop)
-  const glow = new THREE.Mesh(
-    new THREE.PlaneGeometry(12, 14),
-    new THREE.MeshBasicMaterial({ map: glowT, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }),
-  )
-  glow.position.set(0, 0.3, -2.3)
-  scene.add(glow)
-  const inner = new THREE.PointLight(0xffe0a0, 0, 0, 2)
-  inner.position.set(0, 0.5, -1.0)
-  scene.add(inner)
-
-  // diyas
-  const diyas = []
-  const bowlPts = []
-  for (let i = 0; i <= 10; i++) {
-    const a = (i / 10) * (Math.PI / 2)
-    bowlPts.push(new THREE.Vector2(Math.sin(a) * 0.3 + 0.001, 0.14 - Math.cos(a) * 0.14))
+  // falling petals in front
+  const fallGeo = new THREE.CircleGeometry(0.1, 12)
+  fallGeo.scale(0.8, 1.35, 1)
+  const fall = new THREE.InstancedMesh(fallGeo, new THREE.MeshStandardMaterial({ roughness: 0.7, side: THREE.DoubleSide }), 46)
+  fall.frustumCulled = false
+  const fl = []
+  for (let i = 0; i < 46; i++) {
+    fl.push({ x: (rnd() - 0.5) * 8, y: FLOOR_Y + rnd() * 9, z: 0.8 + rnd() * 6, v: 0.006 + rnd() * 0.006, ph: rnd() * 6, s: 0.8 + rnd() * 0.6 })
+    fall.setColorAt(i, new THREE.Color(pc[i % pc.length]))
   }
-  const bowlGeo = new THREE.LatheGeometry(bowlPts, 28)
-  const spriteMat = new THREE.SpriteMaterial({ map: glowT, color: 0xffb347, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.9 })
-  for (const x of [-2.9, 2.9, -1.4, 1.4]) {
-    const g = new THREE.Group()
-    g.position.set(x, FLOOR_Y + 0.02, x > 2 || x < -2 ? 2.4 : 2.9)
-    const bowl = new THREE.Mesh(bowlGeo, brass)
-    bowl.castShadow = true
-    g.add(bowl)
-    const flameMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.83, 0.42).multiplyScalar(2.4) })
-    const flame = new THREE.Mesh(new THREE.SphereGeometry(0.07, 14, 14), flameMat)
-    flame.scale.set(0.8, 1.9, 0.8)
-    flame.position.y = 0.26
-    g.add(flame)
-    const halo = new THREE.Sprite(spriteMat)
-    halo.scale.setScalar(0.9)
-    halo.position.y = 0.3
-    g.add(halo)
-    const light = new THREE.PointLight(0xff9a3c, 6, 7, 2)
-    light.position.y = 0.4
-    g.add(light)
-    scene.add(g)
-    diyas.push({ flame, halo, light, ph: rnd() * 10 })
-  }
+  scene.add(fall)
 
-  // drifting multicolour sparkles
-  const N = small ? 90 : 170
+  // golden dust
+  const N = small ? 80 : 150
   const pos = new Float32Array(N * 3)
-  const cols = new Float32Array(N * 3)
-  const tmp = new THREE.Color()
-  for (let i = 0; i < N; i++) {
-    pos[i * 3] = (rnd() - 0.5) * 12
-    pos[i * 3 + 1] = FLOOR_Y + rnd() * 10
-    pos[i * 3 + 2] = -1 + rnd() * 10
-    tmp.setHex(PASTEL[i % PASTEL.length])
-    cols.set([tmp.r, tmp.g, tmp.b], i * 3)
-  }
+  for (let i = 0; i < N; i++) { pos[i * 3] = (rnd() - 0.5) * 12; pos[i * 3 + 1] = FLOOR_Y + rnd() * 10; pos[i * 3 + 2] = -1 + rnd() * 9 }
   const dustGeo = new THREE.BufferGeometry()
   dustGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3))
-  dustGeo.setAttribute('color', new THREE.BufferAttribute(cols, 3))
-  scene.add(
-    new THREE.Points(dustGeo, new THREE.PointsMaterial({ map: glowT, size: 0.2, vertexColors: true, transparent: true, opacity: 0.8, depthWrite: false })),
-  )
+  scene.add(new THREE.Points(dustGeo, new THREE.PointsMaterial({ map: glowT, size: 0.18, color: 0xffd98a, transparent: true, opacity: 0.8, depthWrite: false })))
 
-  // ---------- post-processing: bloom on lamps/bulbs, vignette, film grain ----------
+  // ---------- post-processing: colour grade, vignette, film grain ----------
   const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 })
   const composer = new EffectComposer(renderer, rt)
   composer.addPass(new RenderPass(scene, camera))
@@ -738,15 +858,13 @@ export function createDoorScene(container) {
       float rand(vec2 co){ return fract(sin(dot(co, vec2(12.9898,78.233))) * 43758.5453); }
       void main(){
         vec4 c = texture2D(tDiffuse, vUv);
-        // colour grade: richer saturation + a touch more contrast (same hues, just more vibrant)
         float luma = dot(c.rgb, vec3(0.2126, 0.7152, 0.0722));
-        c.rgb = mix(vec3(luma), c.rgb, 1.5);
-        c.rgb = (c.rgb - 0.5) * 1.12 + 0.5;
-        c.rgb = clamp(c.rgb, 0.0, 1.0);
+        c.rgb = mix(vec3(luma), c.rgb, 1.25);
+        c.rgb = clamp((c.rgb - 0.5) * 1.08 + 0.5, 0.0, 1.0);
         vec2 d = vUv - 0.5;
-        float v = smoothstep(0.95, 0.28, length(d * vec2(1.0, 1.12)));
-        c.rgb *= mix(0.72, 1.0, v);
-        c.rgb += (rand(vUv * 900.0 + fract(time)) - 0.5) * 0.028;
+        float v = smoothstep(0.95, 0.3, length(d * vec2(1.0, 1.12)));
+        c.rgb *= mix(0.7, 1.0, v);
+        c.rgb += (rand(vUv * 900.0 + fract(time)) - 0.5) * 0.026;
         gl_FragColor = c;
       }`,
   })
@@ -755,7 +873,7 @@ export function createDoorScene(container) {
 
   // ---------- camera fitting, pointer parallax ----------
   let z0 = 12
-  const look = new THREE.Vector3(0, 0.2, 0)
+  const look = new THREE.Vector3(0, 1.0, 0) // aimed a little high, so the scene sits lower and leaves headroom for the names at the top
   function fit() {
     const w = container.clientWidth || window.innerWidth
     const h = container.clientHeight || window.innerHeight
@@ -765,8 +883,8 @@ export function createDoorScene(container) {
     composer.setSize(w, h)
     camera.aspect = w / h
     const f = (camera.fov * Math.PI) / 180
-    const needH = 11.4
-    const needW = 8.4
+    const needH = 12.6
+    const needW = 10.6
     z0 = Math.max(needH / 2 / Math.tan(f / 2), needW / camera.aspect / 2 / Math.tan(f / 2))
     camera.updateProjectionMatrix()
   }
@@ -774,10 +892,7 @@ export function createDoorScene(container) {
   const ro = new ResizeObserver(fit)
   ro.observe(container)
   const mouse = { x: 0, y: 0, sx: 0, sy: 0 }
-  const onMove = (e) => {
-    mouse.x = (e.clientX / window.innerWidth) * 2 - 1
-    mouse.y = (e.clientY / window.innerHeight) * 2 - 1
-  }
+  const onMove = (e) => { mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = (e.clientY / window.innerHeight) * 2 - 1 }
   window.addEventListener('pointermove', onMove, { passive: true })
 
   // ---------- opening sequence ----------
@@ -800,62 +915,70 @@ export function createDoorScene(container) {
   let running = true
   let frames = 0
   let acc = 0
-  const sp = new THREE.Vector3()
   function frame() {
     if (!running) return
     raf = requestAnimationFrame(frame)
     const dt = clock.getDelta()
     const t = clock.elapsedTime
-    // slow device? drop reflections/bloom and resolution so the entrance stays smooth
     if (!hq && !lowQ && ++frames > 24 && frames <= 84) {
       acc += dt
-      if (frames === 84 && acc / 60 > 0.036) {
-        lowQ = true
-        dpr = 1
-        fit()
-      }
+      if (frames === 84 && acc / 60 > 0.036) { lowQ = true; dpr = 1; fit() }
     }
     const p = openStart ? clamp01((performance.now() - openStart) / openDur) : 0
 
-    const door = ease(clamp01((p - 0.04) / 0.74))
-    const theta = door * 1.85
-    leaves.forEach((l) => (l.pivot.rotation.y = -l.side * theta))
+    // the flower curtain draws back to both sides, the camera glides in, golden light floods the scene
+    const door = ease(clamp01((p - 0.04) / 0.72))
+    strands.forEach((s) => {
+      const delay = (1 - s.f) * 0.18
+      const k = ease(clamp01((door - delay) / (1 - 0.18)))
+      const target = Math.sign(s.x0 || 1) * (OPEN_W / 2 - 0.15 + (1 - s.f) * 0.25)
+      s.g.position.x = lerp(s.x0, target, k)
+      s.g.rotation.z = Math.sin(t * 1.3 + s.ph) * (0.03 + 0.12 * Math.sin(k * Math.PI))
+    })
     const move = ease(clamp01(p / 0.94))
-    const zEnd = 2.6
+    // stop far enough back that the whole picture is in frame, even on a narrow phone
+    const halfFov = (camera.fov * Math.PI) / 360
+    const zEnd = Math.max(3.4, -2.7 + (THOTTIL_W * 0.95) / (2 * Math.tan(halfFov) * camera.aspect))
     mouse.sx += (mouse.x - mouse.sx) * 0.04
     mouse.sy += (mouse.y - mouse.sy) * 0.04
-    const idleAmt = 1 - clamp01(p * 4)
+    const idle = 1 - clamp01(p * 4)
     camera.position.set(
-      mouse.sx * 0.7 * idleAmt + Math.sin(t * 0.35) * 0.12 * idleAmt,
-      0.9 - mouse.sy * 0.35 * idleAmt + Math.sin(t * 0.5) * 0.06 * idleAmt,
+      mouse.sx * 0.7 * idle + Math.sin(t * 0.35) * 0.12 * idle,
+      0.9 - mouse.sy * 0.35 * idle + Math.sin(t * 0.5) * 0.06 * idle,
       lerp(z0, zEnd, move),
     )
     camera.lookAt(look)
-    inner.intensity = door * door * 70
-    glow.material.opacity = 0.3 + door * 0.4
-    glow.scale.setScalar(1 + door * 0.5)
-    backdrop.material.color.setRGB(0.5 + door * 0.5, 0.35 + door * 0.5, 0.23 + door * 0.35)
-    renderer.toneMappingExposure = 0.95 + clamp01((p - 0.78) / 0.22) * 1.4
+    inner.intensity = 14 + door * 60
+    glow.material.opacity = 0.55 + door * 0.35
+    glow.scale.setScalar(1 + door * 0.3)
+    renderer.toneMappingExposure = 0.95 + clamp01((p - 0.78) / 0.22) * 1.5
 
+    thottil.rotation.z = Math.sin(t * 1.1) * 0.018
+    thottil.position.y = 0.55 + Math.sin(t * 0.9) * 0.04
+    bells.forEach((b) => (b.g.rotation.z = Math.sin(t * 1.9 + b.ph) * 0.12))
+    bangleGroups.forEach((b) => (b.g.rotation.z = Math.sin(t * 1.2 + b.ph) * 0.04))
     toran.forEach((l) => (l.mesh.rotation.z = l.base + Math.sin(t * 1.3 + l.ph) * 0.07))
-    flags.forEach((f) => (f.mesh.rotation.z = Math.sin(t * 1.6 + f.ph) * 0.12))
-    balloons.forEach((b) => {
-      b.g.position.y = b.y0 + Math.sin(t * 0.9 + b.ph) * 0.1
-      b.g.rotation.z = Math.sin(t * 0.7 + b.ph) * 0.06
-      // string: from the gift box up to the balloon's knot, with a little sag and sway
-      const bx = b.g.position.x, by = b.g.position.y - 0.62, bz = b.g.position.z
-      const a = b.anchor
-      const sw = Math.sin(t * 1.1 + b.ph) * 0.06
-      b.pts.set([a.x, a.y, a.z, lerp(a.x, bx, 0.35) + sw, lerp(a.y, by, 0.35), lerp(a.z, bz, 0.35), lerp(a.x, bx, 0.7) - sw, lerp(a.y, by, 0.7), lerp(a.z, bz, 0.7), bx, by, bz])
-      b.line.geometry.attributes.position.needsUpdate = true
+    trees.forEach((tr) => (tr.crown.rotation.z = Math.sin(t * 0.8 + tr.ph) * 0.03))
+    flames.forEach((d) => {
+      const f = 0.88 + Math.sin(t * 9 + d.ph) * 0.07 + Math.sin(t * 17 + d.ph * 2) * 0.05
+      if (d.f) {
+        d.f.scale.set(d.w * (1.05 - (f - 0.88) * 0.8), d.h * f, 1)
+        d.f.position.x += (Math.sin(t * 5 + d.ph) * 0.004 - (d.f.position.x - Math.round(d.f.position.x * 1000) / 1000) * 0)
+        d.hl.scale.setScalar(d.hs * (0.9 + f * 0.15))
+      }
+      if (d.light) d.light.intensity = 7 + f * 4
     })
-    bulbMats.forEach((m, i) => (m.emissiveIntensity = 0.6 + 1.2 * (0.5 + 0.5 * Math.sin(t * 3 + i * 1.3))))
-    diyas.forEach((d) => {
-      const f = 0.85 + Math.sin(t * 9 + d.ph) * 0.08 + Math.sin(t * 17 + d.ph * 2) * 0.05
-      d.flame.scale.set(0.8, 1.9 * f, 0.8)
-      d.halo.scale.setScalar(0.8 + f * 0.25)
-      d.light.intensity = 5 + f * 3
-    })
+    for (let i = 0; i < fl.length; i++) {
+      const q = fl[i]
+      q.y -= q.v
+      if (q.y < FLOOR_Y + 0.05) q.y = FLOOR_Y + 9
+      dummy.position.set(q.x + Math.sin(t * 0.6 + q.ph) * 0.35, q.y, q.z)
+      dummy.rotation.set(t * 0.8 + q.ph, t * 0.5 + q.ph, t * 0.4)
+      dummy.scale.setScalar(q.s)
+      dummy.updateMatrix()
+      fall.setMatrixAt(i, dummy.matrix)
+    }
+    fall.instanceMatrix.needsUpdate = true
     const arr = dustGeo.attributes.position.array
     for (let i = 0; i < N; i++) {
       arr[i * 3 + 1] += 0.004 + (i % 5) * 0.0012
@@ -865,14 +988,10 @@ export function createDoorScene(container) {
     dustGeo.attributes.position.needsUpdate = true
 
     finish.uniforms.time.value = t
-    composer.render(dt) // always through the composer so the colour grade is applied on every device
-    sp.set(0, 0, 0)
+    composer.render(dt)
     if (openStart) {
       onProg?.(p)
-      if (p >= 1 && !finished) {
-        finished = true
-        onEnd?.()
-      }
+      if (p >= 1 && !finished) { finished = true; onEnd?.() }
     }
   }
   frame()
@@ -885,11 +1004,10 @@ export function createDoorScene(container) {
     scene.traverse((o) => {
       o.geometry?.dispose?.()
       const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : []
-      mats.forEach((m) => {
-        ;['map', 'bumpMap'].forEach((k) => m[k]?.dispose?.())
-        m.dispose?.()
-      })
+      mats.forEach((m) => { ;['map', 'bumpMap', 'alphaMap'].forEach((k) => m[k]?.dispose?.()); m.dispose?.() })
     })
+    orangeGeo.dispose()
+    yellowGeo.dispose()
     composer.dispose?.()
     rt.dispose()
     envTex.dispose()

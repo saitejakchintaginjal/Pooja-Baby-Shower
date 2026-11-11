@@ -64,6 +64,12 @@ body {
 }
 .sway { transform-origin: 50% 0; transform: rotate(var(--r)); animation: sway 5s ease-in-out infinite; }
 
+/* Full-screen photo viewer: fade in, photo eases up */
+@keyframes lb-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes lb-pop { from { opacity: 0; transform: scale(.94) translateY(10px); } to { opacity: 1; transform: none; } }
+.lightbox { animation: lb-fade .25s ease-out; }
+.lightbox-photo { animation: lb-pop .3s cubic-bezier(.2,.7,.2,1); }
+
 /* 3D scroll reveal */
 .reveal {
   opacity: 0;
